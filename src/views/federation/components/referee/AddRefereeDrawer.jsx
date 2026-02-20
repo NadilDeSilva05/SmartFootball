@@ -22,6 +22,9 @@ export default function AddRefereeDrawer ({ open, onClose }) {
   const [formData, setFormData] = useState({
     refereeId: '',
     fullName: '',
+    email: '',
+    password: '',
+    confirmPassword: '',
     age: '',
     licenseLevel: 'district-regional',
     homeTown: '',
@@ -32,6 +35,11 @@ export default function AddRefereeDrawer ({ open, onClose }) {
     const errors = {}
     if (!formData.refereeId?.trim()) errors.refereeId = 'Referee ID is required'
     if (!formData.fullName?.trim()) errors.fullName = 'Full name is required'
+    if (!formData.email?.trim()) errors.email = 'Email is required'
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) errors.email = 'Enter a valid email'
+    if (!formData.password) errors.password = 'Password is required'
+    else if (formData.password.length < 6) errors.password = 'Password must be at least 6 characters'
+    if (formData.password !== formData.confirmPassword) errors.confirmPassword = 'Passwords do not match'
     if (!formData.age?.trim()) errors.age = 'Age is required'
     else {
       const ageNum = parseInt(formData.age, 10)
@@ -47,7 +55,7 @@ export default function AddRefereeDrawer ({ open, onClose }) {
     e.preventDefault()
     if (!validateForm()) return
     onClose()
-    setFormData({ refereeId: '', fullName: '', age: '', licenseLevel: 'district-regional', homeTown: '', status: 'active' })
+    setFormData({ refereeId: '', fullName: '', email: '', password: '', confirmPassword: '', age: '', licenseLevel: 'district-regional', homeTown: '', status: 'active' })
     setFormErrors({})
   }
 
@@ -89,6 +97,36 @@ export default function AddRefereeDrawer ({ open, onClose }) {
             onChange={e => handleInputChange('fullName', e.target.value)}
             error={!!formErrors.fullName}
             helperText={formErrors.fullName}
+          />
+          <TextField
+            fullWidth
+            size='small'
+            label='Email'
+            type='email'
+            value={formData.email}
+            onChange={e => handleInputChange('email', e.target.value)}
+            error={!!formErrors.email}
+            helperText={formErrors.email}
+          />
+          <TextField
+            fullWidth
+            size='small'
+            label='Password'
+            type='password'
+            value={formData.password}
+            onChange={e => handleInputChange('password', e.target.value)}
+            error={!!formErrors.password}
+            helperText={formErrors.password}
+          />
+          <TextField
+            fullWidth
+            size='small'
+            label='Confirm Password'
+            type='password'
+            value={formData.confirmPassword}
+            onChange={e => handleInputChange('confirmPassword', e.target.value)}
+            error={!!formErrors.confirmPassword}
+            helperText={formErrors.confirmPassword}
           />
           <TextField
             fullWidth

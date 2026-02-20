@@ -1,7 +1,7 @@
 'use client'
 
 // React Imports
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 // Next Imports
 import dynamic from 'next/dynamic'
@@ -19,11 +19,16 @@ import TableHead from '@mui/material/TableHead'
 import TableRow from '@mui/material/TableRow'
 import Box from '@mui/material/Box'
 import Grid from '@mui/material/Grid'
+import Chip from '@mui/material/Chip'
 
 // Component Imports
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from '@/libs/Recharts'
+import { getSessionsByPlayerId } from '@views/coach/liveMatchConstants'
 
 const AppRecharts = dynamic(() => import('@/libs/styles/AppRecharts'))
+
+// Demo: current player ID (in production from auth)
+const CURRENT_PLAYER_ID = 'PLR-001'
 
 // Hardcoded match list and performance data
 const MATCH_LIST = [
@@ -51,6 +56,11 @@ const GOALS_BY_MONTH = [
 
 const PerformanceHistory = () => {
   const [matchList] = useState(MATCH_LIST)
+  const [iotSessions, setIotSessions] = useState([])
+
+  useEffect(() => {
+    setIotSessions(getSessionsByPlayerId(CURRENT_PLAYER_ID))
+  }, [])
 
   const handleDownloadReport = () => {
     // Hardcoded: simulate download
@@ -74,7 +84,7 @@ const PerformanceHistory = () => {
       </div>
 
       <Card>
-        <CardHeader title='Match List' />
+        <CardHeader title='Match List' subheader='Match results and ratings.' />
         <CardContent>
           <Table size='small'>
             <TableHead>
@@ -104,6 +114,53 @@ const PerformanceHistory = () => {
           </Table>
         </CardContent>
       </Card>
+
+      {iotSessions.length > 0 && (
+        <Card>
+          <CardHeader
+            title='IoT match sessions'
+            subheader='Final stats from wearable device (after substitution or full-time).'
+          />
+          <CardContent>
+            <Table size='small'>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Match</TableCell>
+                  <TableCell align='center'>Reason</TableCell>
+                  <TableCell align='center'>Minutes</TableCell>
+                  <TableCell align='center'>Heart Rate</TableCell>
+                  <TableCell align='center'>Fatigue</TableCell>
+                  <TableCell align='center'>Player Load</TableCell>
+                  <TableCell align='center'>Sprints</TableCell>
+                  <TableCell align='center'>High-Int. Dist. (m)</TableCell>
+                  <TableCell align='center'>Work Rate</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {iotSessions.map(s => (
+                  <TableRow key={s.id} hover>
+                    <TableCell>
+                      <Typography variant='body2' className='font-medium'>{s.matchName}</Typography>
+                    </TableCell>
+                    <TableCell align='center'>
+                      <Chip size='small' label={s.reason === 'substitution' ? 'Substituted' : 'Full time'} color={s.reason === 'substitution' ? 'warning' : 'info'} variant='tonal' />
+                    </TableCell>
+                    <TableCell align='center'>{s.minutesPlayed}</TableCell>
+                    <TableCell align='center'>{s.heartRate} bpm</TableCell>
+                    <TableCell align='center'>
+                      <Chip size='small' label={s.fatigueLevel} color={s.fatigueLevel === 'High' ? 'error' : s.fatigueLevel === 'Medium' ? 'warning' : 'success'} variant='outlined' />
+                    </TableCell>
+                    <TableCell align='center'>{s.playerLoad?.toFixed(1)}</TableCell>
+                    <TableCell align='center'>{s.sprintCount}</TableCell>
+                    <TableCell align='center'>{s.highIntensityDist}</TableCell>
+                    <TableCell align='center'>{s.workRate}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
 
       <Grid container spacing={4}>
         <Grid item xs={12} md={6}>

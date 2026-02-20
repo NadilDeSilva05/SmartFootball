@@ -149,6 +149,9 @@ const VerticalMenu = ({ scrollMenu }) => {
             <MenuItem href='/coach/injury-alerts' icon={<i className='ri-alarm-warning-line' />}>
               Injury Risk Alerts
             </MenuItem>
+            <MenuItem href='/coach/performance-history' icon={<i className='ri-bar-chart-line' />}>
+              Performance History
+            </MenuItem>
           </MenuSection>
         )}
         {isPlayer && (
