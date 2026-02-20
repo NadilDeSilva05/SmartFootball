@@ -1,19 +1,21 @@
 'use client'
 
 // React Imports
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 
 // MUI Imports
+import Box from '@mui/material/Box'
 import Card from '@mui/material/Card'
+import CardContent from '@mui/material/CardContent'
 import CardHeader from '@mui/material/CardHeader'
 import Divider from '@mui/material/Divider'
-import Drawer from '@mui/material/Drawer'
 import Button from '@mui/material/Button'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import Chip from '@mui/material/Chip'
 import IconButton from '@mui/material/IconButton'
 import TablePagination from '@mui/material/TablePagination'
+import useMediaQuery from '@mui/material/useMediaQuery'
 
 // Third-party Imports
 import classnames from 'classnames'
@@ -31,15 +33,18 @@ import {
 import OptionMenu from '@core/components/option-menu'
 import HorizontalWithSubtitle from '@components/card-statistics/HorizontalWithSubtitle'
 import ConfirmationDialog from '@components/dialogs/confirmation-dialog'
+import AddRefereeDrawer from '@views/federation/components/referee/AddRefereeDrawer'
+import EditRefereeDrawer from '@views/federation/components/referee/EditRefereeDrawer'
+import { LICENSE_LEVEL_OPTIONS } from '@views/federation/constants'
 
 // Style Imports
 import tableStyles from '@core/styles/table.module.css'
 
 const REFEREES_DATA = [
-  { id: '1', name: 'John Silva', email: 'john.silva@ref.com', level: 'FIFA', status: 'active' },
-  { id: '2', name: 'Maria Perera', email: 'maria.perera@ref.com', level: 'National', status: 'active' },
-  { id: '3', name: 'David Fernando', email: 'david.f@ref.com', level: 'Regional', status: 'pending' },
-  { id: '4', name: 'Sarah Gomes', email: 'sarah.g@ref.com', level: 'National', status: 'inactive' }
+  { id: '1', refereeId: 'REF-001', fullName: 'John Silva', age: 38, licenseLevel: 'fifa-elite', licenseLevelLabel: 'Elite FIFA-listed referees', homeTown: 'Colombo', status: 'active' },
+  { id: '2', refereeId: 'REF-002', fullName: 'Maria Perera', age: 35, licenseLevel: 'national', licenseLevelLabel: 'National (Class 1/Grade 1)', homeTown: 'Kandy', status: 'active' },
+  { id: '3', refereeId: 'REF-003', fullName: 'David Fernando', age: 32, licenseLevel: 'district-regional', licenseLevelLabel: 'District/Regional', homeTown: 'Galle', status: 'pending' },
+  { id: '4', refereeId: 'REF-004', fullName: 'Sarah Gomes', age: 40, licenseLevel: 'national', licenseLevelLabel: 'National (Class 1/Grade 1)', homeTown: 'Jaffna', status: 'inactive' }
 ]
 
 const RefereeCardsData = [
@@ -59,26 +64,36 @@ const RefereeList = () => {
   const [selectedReferee, setSelectedReferee] = useState(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [refereeToDelete, setRefereeToDelete] = useState(null)
+  const isMobile = useMediaQuery(theme => theme.breakpoints.down('md'))
 
   const columns = useMemo(
     () => [
-      columnHelper.accessor('name', {
-        header: 'Name',
+      columnHelper.accessor('refereeId', {
+        header: 'Referee ID',
+        cell: ({ row }) => <Typography variant='body2'>{row.original.refereeId || '-'}</Typography>
+      }),
+      columnHelper.accessor('fullName', {
+        header: 'Full Name',
         cell: ({ row }) => (
           <Typography className='font-medium' color='text.primary'>
-            {row.original.name}
+            {row.original.fullName}
           </Typography>
         )
       }),
-      columnHelper.accessor('email', {
-        header: 'Email',
-        cell: ({ row }) => <Typography>{row.original.email}</Typography>
+      columnHelper.accessor('age', {
+        header: 'Age',
+        cell: ({ row }) => <Typography variant='body2'>{row.original.age}</Typography>
       }),
-      columnHelper.accessor('level', {
-        header: 'Level',
-        cell: ({ row }) => (
-          <Chip variant='tonal' size='small' color='info' label={row.original.level} />
-        )
+      columnHelper.accessor('licenseLevel', {
+        header: 'License Level',
+        cell: ({ row }) => {
+          const label = row.original.licenseLevelLabel || LICENSE_LEVEL_OPTIONS.find(o => o.id === row.original.licenseLevel)?.label || row.original.licenseLevel
+          return <Chip variant='tonal' size='small' color='info' label={label} />
+        }
+      }),
+      columnHelper.accessor('homeTown', {
+        header: 'Home Town',
+        cell: ({ row }) => <Typography variant='body2'>{row.original.homeTown || '-'}</Typography>
       }),
       columnHelper.accessor('status', {
         header: 'Status',
@@ -179,60 +194,157 @@ const RefereeList = () => {
           <CardHeader
             title='Referees List'
             action={
-              <div className='flex items-center gap-4 flex-wrap'>
+              <Box
+                sx={{
+                  display: 'flex',
+                  flexDirection: { xs: 'column', sm: 'row' },
+                  alignItems: { xs: 'stretch', sm: 'center' },
+                  gap: 2,
+                  width: { xs: '100%', sm: 'auto' },
+                  minWidth: { xs: 0, sm: 200 }
+                }}
+              >
                 <TextField
                   size='small'
                   placeholder='Search referees...'
                   value={globalFilter ?? ''}
                   onChange={e => setGlobalFilter(e.target.value)}
-                  className='is-full sm:is-auto min-is-[200px]'
+                  sx={{
+                    minWidth: { xs: 0, sm: 200 },
+                    flex: { xs: '1 1 auto', sm: '0 0 auto' }
+                  }}
                 />
-                <Button variant='contained' startIcon={<i className='ri-add-line' />} onClick={() => setAddDrawerOpen(true)}>
+                <Button
+                  variant='contained'
+                  startIcon={<i className='ri-add-line' />}
+                  onClick={() => setAddDrawerOpen(true)}
+                  sx={{ flexShrink: 0 }}
+                >
                   Add Referee
                 </Button>
-              </div>
+              </Box>
             }
+            sx={{
+              flexDirection: { xs: 'column', sm: 'row' },
+              alignItems: { xs: 'stretch', sm: 'center' },
+              gap: 2,
+              '& .MuiCardHeader-action': {
+                margin: 0,
+                alignSelf: { xs: 'stretch', sm: 'center' },
+                width: { xs: '100%', sm: 'auto' }
+              }
+            }}
           />
           <Divider />
-          <div className='overflow-x-auto'>
-            <table className={tableStyles.table}>
-              <thead>
-                {table.getHeaderGroups().map(headerGroup => (
-                  <tr key={headerGroup.id}>
-                    {headerGroup.headers.map(header => (
-                      <th key={header.id}>
-                        {header.isPlaceholder ? null : (
-                          <div
-                            className={classnames({ 'cursor-pointer select-none': header.column.getCanSort() })}
-                            onClick={header.column.getToggleSortingHandler()}
+          {isMobile ? (
+            <div className='p-4 flex flex-col gap-4'>
+              {table.getFilteredRowModel().rows.length === 0 ? (
+                <Typography color='text.secondary' className='text-center py-8'>No referees found</Typography>
+              ) : (
+                table.getRowModel().rows.map(row => {
+                  const referee = row.original
+                  const statusColor = referee.status === 'active' ? 'success' : referee.status === 'pending' ? 'warning' : 'secondary'
+
+                  return (
+                    <Card
+                      key={referee.id}
+                      elevation={0}
+                      variant='outlined'
+                      sx={{
+                        borderRadius: 2,
+                        transition: 'box-shadow 0.2s ease',
+                        '&:hover': { boxShadow: 1 }
+                      }}
+                    >
+                      <CardContent>
+                        <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 1, mb: 2 }}>
+                          <Box>
+                            <Typography variant='subtitle1' fontWeight={600} color='text.primary'>
+                              {referee.fullName}
+                            </Typography>
+                            <Typography variant='caption' color='text.secondary'>
+                              {referee.refereeId} • {referee.licenseLevelLabel || LICENSE_LEVEL_OPTIONS.find(o => o.id === referee.licenseLevel)?.label || referee.licenseLevel}
+                            </Typography>
+                          </Box>
+                          <Chip label={referee.status} color={statusColor} size='small' variant='tonal' sx={{ textTransform: 'capitalize' }} />
+                        </Box>
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <i className='ri-number-1 text-base text-textSecondary' />
+                            <Typography variant='body2' color='text.secondary'>Age: {referee.age}</Typography>
+                          </Box>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <i className='ri-map-pin-line text-base text-textSecondary' />
+                            <Typography variant='body2' color='text.secondary'>{referee.homeTown}</Typography>
+                          </Box>
+                        </Box>
+                        <Divider sx={{ my: 2 }} />
+                        <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
+                          <Button
+                            size='small'
+                            variant='outlined'
+                            startIcon={<i className='ri-edit-box-line' />}
+                            onClick={() => { setSelectedReferee(referee); setEditDrawerOpen(true) }}
                           >
-                            {flexRender(header.column.columnDef.header, header.getContext())}
-                          </div>
-                        )}
-                      </th>
-                    ))}
-                  </tr>
-                ))}
-              </thead>
-              <tbody>
-                {table.getFilteredRowModel().rows.length === 0 ? (
-                  <tr>
-                    <td colSpan={columns.length} className='text-center'>
-                      No referees found
-                    </td>
-                  </tr>
-                ) : (
-                  table.getRowModel().rows.map(row => (
-                    <tr key={row.id}>
-                      {row.getVisibleCells().map(cell => (
-                        <td key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</td>
+                            Edit
+                          </Button>
+                          <Button
+                            size='small'
+                            variant='outlined'
+                            color='error'
+                            startIcon={<i className='ri-delete-bin-7-line' />}
+                            onClick={() => { setRefereeToDelete(referee); setDeleteDialogOpen(true) }}
+                          >
+                            Delete
+                          </Button>
+                        </Box>
+                      </CardContent>
+                    </Card>
+                  )
+                })
+              )}
+            </div>
+          ) : (
+            <div className='overflow-x-auto'>
+              <table className={tableStyles.table}>
+                <thead>
+                  {table.getHeaderGroups().map(headerGroup => (
+                    <tr key={headerGroup.id}>
+                      {headerGroup.headers.map(header => (
+                        <th key={header.id}>
+                          {header.isPlaceholder ? null : (
+                            <div
+                              className={classnames({ 'cursor-pointer select-none': header.column.getCanSort() })}
+                              onClick={header.column.getToggleSortingHandler()}
+                            >
+                              {flexRender(header.column.columnDef.header, header.getContext())}
+                            </div>
+                          )}
+                        </th>
                       ))}
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                  ))}
+                </thead>
+                <tbody>
+                  {table.getFilteredRowModel().rows.length === 0 ? (
+                    <tr>
+                      <td colSpan={columns.length} className='text-center'>
+                        No referees found
+                      </td>
+                    </tr>
+                  ) : (
+                    table.getRowModel().rows.map(row => (
+                      <tr key={row.id}>
+                        {row.getVisibleCells().map(cell => (
+                          <td key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</td>
+                        ))}
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
           <TablePagination
             rowsPerPageOptions={[5, 10, 25]}
             component='div'
@@ -253,98 +365,12 @@ const RefereeList = () => {
         onClose={() => { setDeleteDialogOpen(false); setRefereeToDelete(null) }}
         onConfirm={handleDeleteConfirm}
         title='Delete Referee'
-        content={refereeToDelete ? `Are you sure you want to delete "${refereeToDelete.name}"?` : ''}
+        content={refereeToDelete ? `Are you sure you want to delete "${refereeToDelete.fullName}"? This action cannot be undone.` : ''}
         confirmText='Delete'
         cancelText='Cancel'
         confirmColor='error'
       />
     </>
-  )
-}
-
-const AddRefereeDrawer = ({ open, onClose }) => {
-  const [formData, setFormData] = useState({ name: '', email: '', level: 'Regional', status: 'active' })
-
-  const handleSubmit = e => {
-    e.preventDefault()
-    onClose()
-    setFormData({ name: '', email: '', level: 'Regional', status: 'active' })
-  }
-
-  return (
-    <Drawer open={open} anchor='right' variant='temporary' onClose={onClose} ModalProps={{ keepMounted: true }} sx={{ '& .MuiDrawer-paper': { width: { xs: 300, sm: 400 } } }}>
-      <div className='flex items-center justify-between pli-5 plb-[15px]'>
-        <Typography variant='h5'>Add New Referee</Typography>
-        <IconButton onClick={onClose} size='small'>
-          <i className='ri-close-line' />
-        </IconButton>
-      </div>
-      <Divider />
-      <div className='p-5'>
-        <form onSubmit={handleSubmit} className='flex flex-col gap-4'>
-          <TextField fullWidth label='Full Name' value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} />
-          <TextField fullWidth label='Email' type='email' value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} />
-          <TextField fullWidth select SelectProps={{ native: true }} label='Level' value={formData.level} onChange={e => setFormData({ ...formData, level: e.target.value })}>
-            <option value='FIFA'>FIFA</option>
-            <option value='National'>National</option>
-            <option value='Regional'>Regional</option>
-          </TextField>
-          <div className='flex gap-2'>
-            <Button type='submit' variant='contained'>Submit</Button>
-            <Button type='button' variant='outlined' color='secondary' onClick={onClose}>Cancel</Button>
-          </div>
-        </form>
-      </div>
-    </Drawer>
-  )
-}
-
-const EditRefereeDrawer = ({ open, onClose, referee }) => {
-  const [formData, setFormData] = useState({ name: '', email: '', level: 'Regional', status: 'active' })
-
-  useEffect(() => {
-    if (referee) {
-      setFormData({ name: referee.name, email: referee.email, level: referee.level, status: referee.status })
-    }
-  }, [referee])
-
-  const handleSubmit = e => {
-    e.preventDefault()
-    onClose()
-  }
-
-  return (
-    <Drawer open={open} anchor='right' variant='temporary' onClose={onClose} ModalProps={{ keepMounted: true }} sx={{ '& .MuiDrawer-paper': { width: { xs: 300, sm: 400 } } }}>
-      <div className='flex items-center justify-between pli-5 plb-[15px]'>
-        <Typography variant='h5'>Edit Referee</Typography>
-        <IconButton onClick={onClose} size='small'>
-          <i className='ri-close-line' />
-        </IconButton>
-      </div>
-      <Divider />
-      <div className='p-5'>
-        {referee && (
-          <form onSubmit={handleSubmit} className='flex flex-col gap-4'>
-            <TextField fullWidth label='Full Name' value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} />
-            <TextField fullWidth label='Email' type='email' value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} />
-            <TextField fullWidth select SelectProps={{ native: true }} label='Level' value={formData.level} onChange={e => setFormData({ ...formData, level: e.target.value })}>
-              <option value='FIFA'>FIFA</option>
-              <option value='National'>National</option>
-              <option value='Regional'>Regional</option>
-            </TextField>
-            <TextField fullWidth select SelectProps={{ native: true }} label='Status' value={formData.status} onChange={e => setFormData({ ...formData, status: e.target.value })}>
-              <option value='active'>Active</option>
-              <option value='pending'>Pending</option>
-              <option value='inactive'>Inactive</option>
-            </TextField>
-            <div className='flex gap-2'>
-              <Button type='submit' variant='contained'>Save</Button>
-              <Button type='button' variant='outlined' color='secondary' onClick={onClose}>Cancel</Button>
-            </div>
-          </form>
-        )}
-      </div>
-    </Drawer>
   )
 }
 

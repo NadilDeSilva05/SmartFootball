@@ -1,13 +1,12 @@
 'use client'
 
 // React Imports
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 
 // MUI Imports
 import Card from '@mui/material/Card'
 import CardHeader from '@mui/material/CardHeader'
 import Divider from '@mui/material/Divider'
-import Drawer from '@mui/material/Drawer'
 import Button from '@mui/material/Button'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
@@ -31,6 +30,9 @@ import {
 import OptionMenu from '@core/components/option-menu'
 import HorizontalWithSubtitle from '@components/card-statistics/HorizontalWithSubtitle'
 import ConfirmationDialog from '@components/dialogs/confirmation-dialog'
+import StandingsModal from '@views/federation/components/league/StandingsModal'
+import AddLeagueDrawer from '@views/federation/components/league/AddLeagueDrawer'
+import EditLeagueDrawer from '@views/federation/components/league/EditLeagueDrawer'
 
 // Style Imports
 import tableStyles from '@core/styles/table.module.css'
@@ -59,6 +61,8 @@ const LeagueList = () => {
   const [selectedLeague, setSelectedLeague] = useState(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [leagueToDelete, setLeagueToDelete] = useState(null)
+  const [standingsModalOpen, setStandingsModalOpen] = useState(false)
+  const [leagueForStandings, setLeagueForStandings] = useState(null)
 
   const columns = useMemo(
     () => [
@@ -100,6 +104,18 @@ const LeagueList = () => {
         header: 'Actions',
         cell: ({ row }) => (
           <div className='flex items-center gap-1'>
+            <Button
+              size='small'
+              variant='outlined'
+              startIcon={<i className='ri-bar-chart-box-line text-[18px]' />}
+              onClick={() => {
+                setLeagueForStandings(row.original)
+                setStandingsModalOpen(true)
+              }}
+              sx={{ mr: 0.5 }}
+            >
+              View standings
+            </Button>
             <IconButton
               size='small'
               onClick={() => {
@@ -112,6 +128,17 @@ const LeagueList = () => {
             <OptionMenu
               iconClassName='text-[22px] text-textSecondary'
               options={[
+                {
+                  text: 'View standings',
+                  icon: 'ri-bar-chart-box-line text-[22px]',
+                  menuItemProps: {
+                    className: 'flex items-center gap-2 text-textSecondary',
+                    onClick: () => {
+                      setLeagueForStandings(row.original)
+                      setStandingsModalOpen(true)
+                    }
+                  }
+                },
                 {
                   text: 'Edit',
                   icon: 'ri-edit-box-line text-[22px]',
@@ -259,6 +286,15 @@ const LeagueList = () => {
         league={selectedLeague}
       />
 
+      <StandingsModal
+        open={standingsModalOpen}
+        onClose={() => {
+          setStandingsModalOpen(false)
+          setLeagueForStandings(null)
+        }}
+        league={leagueForStandings}
+      />
+
       <ConfirmationDialog
         open={deleteDialogOpen}
         onClose={() => {
@@ -277,173 +313,6 @@ const LeagueList = () => {
         confirmColor='error'
       />
     </>
-  )
-}
-
-const AddLeagueDrawer = ({ open, onClose }) => {
-  const [formData, setFormData] = useState({ name: '', region: 'National', season: '2024-25', status: 'active' })
-
-  const handleSubmit = e => {
-    e.preventDefault()
-    onClose()
-    setFormData({ name: '', region: 'National', season: '2024-25', status: 'active' })
-  }
-
-  return (
-    <Drawer
-      open={open}
-      anchor='right'
-      variant='temporary'
-      onClose={onClose}
-      ModalProps={{ keepMounted: true }}
-      sx={{ '& .MuiDrawer-paper': { width: { xs: 300, sm: 400 } } }}
-    >
-      <div className='flex items-center justify-between pli-5 plb-[15px]'>
-        <Typography variant='h5'>Add New League</Typography>
-        <IconButton onClick={onClose} size='small'>
-          <i className='ri-close-line' />
-        </IconButton>
-      </div>
-      <Divider />
-      <div className='p-5'>
-        <form onSubmit={handleSubmit} className='flex flex-col gap-4'>
-          <TextField
-            fullWidth
-            label='League Name'
-            value={formData.name}
-            onChange={e => setFormData({ ...formData, name: e.target.value })}
-          />
-          <TextField
-            fullWidth
-            select
-            SelectProps={{ native: true }}
-            label='Region'
-            value={formData.region}
-            onChange={e => setFormData({ ...formData, region: e.target.value })}
-          >
-            <option value='National'>National</option>
-            <option value='Regional'>Regional</option>
-            <option value='District'>District</option>
-          </TextField>
-          <TextField
-            fullWidth
-            label='Season'
-            placeholder='e.g. 2024-25'
-            value={formData.season}
-            onChange={e => setFormData({ ...formData, season: e.target.value })}
-          />
-          <TextField
-            fullWidth
-            select
-            SelectProps={{ native: true }}
-            label='Status'
-            value={formData.status}
-            onChange={e => setFormData({ ...formData, status: e.target.value })}
-          >
-            <option value='active'>Active</option>
-            <option value='upcoming'>Upcoming</option>
-            <option value='completed'>Completed</option>
-          </TextField>
-          <div className='flex gap-2'>
-            <Button type='submit' variant='contained'>
-              Submit
-            </Button>
-            <Button type='button' variant='outlined' color='secondary' onClick={onClose}>
-              Cancel
-            </Button>
-          </div>
-        </form>
-      </div>
-    </Drawer>
-  )
-}
-
-const EditLeagueDrawer = ({ open, onClose, league }) => {
-  const [formData, setFormData] = useState({ name: '', region: 'National', season: '', status: 'active' })
-
-  useEffect(() => {
-    if (league) {
-      setFormData({
-        name: league.name,
-        region: league.region,
-        season: league.season,
-        status: league.status
-      })
-    }
-  }, [league])
-
-  const handleSubmit = e => {
-    e.preventDefault()
-    onClose()
-  }
-
-  return (
-    <Drawer
-      open={open}
-      anchor='right'
-      variant='temporary'
-      onClose={onClose}
-      ModalProps={{ keepMounted: true }}
-      sx={{ '& .MuiDrawer-paper': { width: { xs: 300, sm: 400 } } }}
-    >
-      <div className='flex items-center justify-between pli-5 plb-[15px]'>
-        <Typography variant='h5'>Edit League</Typography>
-        <IconButton onClick={onClose} size='small'>
-          <i className='ri-close-line' />
-        </IconButton>
-      </div>
-      <Divider />
-      <div className='p-5'>
-        {league && (
-          <form onSubmit={handleSubmit} className='flex flex-col gap-4'>
-            <TextField
-              fullWidth
-              label='League Name'
-              value={formData.name}
-              onChange={e => setFormData({ ...formData, name: e.target.value })}
-            />
-            <TextField
-              fullWidth
-              select
-              SelectProps={{ native: true }}
-              label='Region'
-              value={formData.region}
-              onChange={e => setFormData({ ...formData, region: e.target.value })}
-            >
-              <option value='National'>National</option>
-              <option value='Regional'>Regional</option>
-              <option value='District'>District</option>
-            </TextField>
-            <TextField
-              fullWidth
-              label='Season'
-              value={formData.season}
-              onChange={e => setFormData({ ...formData, season: e.target.value })}
-            />
-            <TextField
-              fullWidth
-              select
-              SelectProps={{ native: true }}
-              label='Status'
-              value={formData.status}
-              onChange={e => setFormData({ ...formData, status: e.target.value })}
-            >
-              <option value='active'>Active</option>
-              <option value='upcoming'>Upcoming</option>
-              <option value='completed'>Completed</option>
-            </TextField>
-            <div className='flex gap-2'>
-              <Button type='submit' variant='contained'>
-                Save
-              </Button>
-              <Button type='button' variant='outlined' color='secondary' onClick={onClose}>
-                Cancel
-              </Button>
-            </div>
-          </form>
-        )}
-      </div>
-    </Drawer>
   )
 }
 

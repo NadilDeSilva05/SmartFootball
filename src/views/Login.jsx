@@ -40,13 +40,10 @@ const Login = ({ mode }) => {
   // States
   const [isPasswordShown, setIsPasswordShown] = useState(false)
 
-  // Vars
+  // Vars - Football-themed illustrations
   const darkImg = '/images/pages/auth-v2-mask-dark.png'
   const lightImg = '/images/pages/auth-v2-mask-light.png'
-  const darkIllustration = '/images/illustrations/auth/v2-login-dark.png'
-  const lightIllustration = '/images/illustrations/auth/v2-login-light.png'
-  const borderedDarkIllustration = '/images/illustrations/auth/v2-login-dark-border.png'
-  const borderedLightIllustration = '/images/illustrations/auth/v2-login-light-border.png'
+  const footballIllustration = '/images/illustrations/football-player.svg'
 
   // Hooks
   const router = useRouter()
@@ -54,13 +51,6 @@ const Login = ({ mode }) => {
   const dispatch = useDispatch()
 
   const authBackground = useImageVariant(mode, lightImg, darkImg)
-  const characterIllustration = useImageVariant(
-    mode,
-    lightIllustration,
-    darkIllustration,
-    borderedLightIllustration,
-    borderedDarkIllustration
-  )
 
   // Football platform roles
   const roleOptions = [
@@ -150,21 +140,26 @@ const Login = ({ mode }) => {
 
   return (
     <div className='flex bs-full justify-center'>
-      <div className='flex bs-full items-center justify-center flex-1 min-bs-[100dvh] relative p-6 max-md:hidden'>
-        <div className='plb-12 pis-12'>
+      <div
+        className='flex bs-full items-center justify-center flex-1 min-bs-[100dvh] relative p-6 max-md:hidden overflow-hidden'
+        style={{
+          background: 'linear-gradient(135deg, rgba(0, 128, 0, 0.08) 0%, rgba(0, 100, 0, 0.04) 50%, transparent 100%)'
+        }}
+      >
+        <div className='plb-12 pis-12 relative z-10'>
           <img
-            src={characterIllustration}
-            alt='character-illustration'
-            className='max-bs-[500px] max-is-full bs-auto'
+            src={footballIllustration}
+            alt='Football illustration'
+            className='max-bs-[500px] max-is-full bs-auto drop-shadow-lg'
           />
         </div>
         <Illustrations
-          image1={{ src: '/images/illustrations/objects/tree-2.png' }}
-          image2={null}
+          image1={{ src: '/images/illustrations/football-goal.svg', className: 'absolute inline-start-4 block-end-4 opacity-40', height: 160 }}
+          image2={{ src: '/images/illustrations/football%20cheering.svg', className: 'absolute inline-end-4 block-end-8 opacity-30', height: 120 }}
           maskImg={{ src: authBackground }}
         />
       </div>
-      <div className='flex justify-center items-center bs-full bg-backgroundPaper !min-is-full p-6 md:!min-is-[unset] md:p-12 md:is-[480px]'>
+      <div className='flex justify-center items-center bs-full bg-backgroundPaper !min-is-full p-6 md:!min-is-[unset] md:p-12 md:is-[480px] border-is border-solid border-default'>
         <div className='absolute block-start-5 sm:block-start-[33px] inline-start-6 sm:inline-start-[38px]'>
           <div className='flex justify-center items-center gap-3 mbe-6'>
             <img
