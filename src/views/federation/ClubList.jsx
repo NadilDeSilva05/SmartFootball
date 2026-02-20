@@ -1,19 +1,21 @@
 'use client'
 
 // React Imports
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 
 // MUI Imports
+import Box from '@mui/material/Box'
 import Card from '@mui/material/Card'
 import CardHeader from '@mui/material/CardHeader'
+import CardContent from '@mui/material/CardContent'
 import Divider from '@mui/material/Divider'
-import Drawer from '@mui/material/Drawer'
 import Button from '@mui/material/Button'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import Chip from '@mui/material/Chip'
 import IconButton from '@mui/material/IconButton'
 import TablePagination from '@mui/material/TablePagination'
+import useMediaQuery from '@mui/material/useMediaQuery'
 
 // Third-party Imports
 import classnames from 'classnames'
@@ -31,16 +33,18 @@ import {
 import OptionMenu from '@core/components/option-menu'
 import HorizontalWithSubtitle from '@components/card-statistics/HorizontalWithSubtitle'
 import ConfirmationDialog from '@components/dialogs/confirmation-dialog'
+import AddClubDrawer from '@views/federation/components/club/AddClubDrawer'
+import EditClubDrawer from '@views/federation/components/club/EditClubDrawer'
 
 // Style Imports
 import tableStyles from '@core/styles/table.module.css'
 
 // Hardcoded data
 const CLUBS_DATA = [
-  { id: '1', name: 'City FC', city: 'Colombo', contactEmail: 'admin@cityfc.com', status: 'active' },
-  { id: '2', name: 'United SC', city: 'Kandy', contactEmail: 'info@unitedsc.com', status: 'active' },
-  { id: '3', name: 'Rovers FC', city: 'Galle', contactEmail: 'contact@roversfc.com', status: 'pending' },
-  { id: '4', name: 'Athletic Club', city: 'Jaffna', contactEmail: 'admin@athletic.com', status: 'inactive' }
+  { id: '1', clubId: 'CLB-001', name: 'City FC', city: 'Colombo', league: '1', leagueName: 'Premier League', adminFullName: 'John Silva', adminEmail: 'admin@cityfc.com', status: 'active' },
+  { id: '2', clubId: 'CLB-002', name: 'United SC', city: 'Kandy', league: '1', leagueName: 'Premier League', adminFullName: 'David Fernando', adminEmail: 'info@unitedsc.com', status: 'active' },
+  { id: '3', clubId: 'CLB-003', name: 'Rovers FC', city: 'Galle', league: '2', leagueName: 'Division One', adminFullName: 'Maria Perera', adminEmail: 'contact@roversfc.com', status: 'pending' },
+  { id: '4', clubId: 'CLB-004', name: 'Athletic Club', city: 'Jaffna', league: '3', leagueName: 'Regional Cup', adminFullName: 'Michael Brown', adminEmail: 'admin@athletic.com', status: 'inactive' }
 ]
 
 const ClubCardsData = [
@@ -60,9 +64,14 @@ const ClubList = () => {
   const [selectedClub, setSelectedClub] = useState(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [clubToDelete, setClubToDelete] = useState(null)
+  const isMobile = useMediaQuery(theme => theme.breakpoints.down('md'))
 
   const columns = useMemo(
     () => [
+      columnHelper.accessor('clubId', {
+        header: 'Club ID',
+        cell: ({ row }) => <Typography variant='body2'>{row.original.clubId || '-'}</Typography>
+      }),
       columnHelper.accessor('name', {
         header: 'Club Name',
         cell: ({ row }) => (
@@ -73,11 +82,19 @@ const ClubList = () => {
       }),
       columnHelper.accessor('city', {
         header: 'City',
-        cell: ({ row }) => <Typography>{row.original.city}</Typography>
+        cell: ({ row }) => <Typography variant='body2'>{row.original.city}</Typography>
       }),
-      columnHelper.accessor('contactEmail', {
-        header: 'Contact Email',
-        cell: ({ row }) => <Typography>{row.original.contactEmail}</Typography>
+      columnHelper.accessor('leagueName', {
+        header: 'League',
+        cell: ({ row }) => <Typography variant='body2'>{row.original.leagueName || '-'}</Typography>
+      }),
+      columnHelper.accessor('adminFullName', {
+        header: 'Admin Name',
+        cell: ({ row }) => <Typography variant='body2'>{row.original.adminFullName || '-'}</Typography>
+      }),
+      columnHelper.accessor('adminEmail', {
+        header: 'Admin Email',
+        cell: ({ row }) => <Typography variant='body2'>{row.original.adminEmail || '-'}</Typography>
       }),
       columnHelper.accessor('status', {
         header: 'Status',
@@ -178,60 +195,163 @@ const ClubList = () => {
           <CardHeader
             title='Clubs List'
             action={
-              <div className='flex items-center gap-4 flex-wrap'>
+              <Box
+                sx={{
+                  display: 'flex',
+                  flexDirection: { xs: 'column', sm: 'row' },
+                  alignItems: { xs: 'stretch', sm: 'center' },
+                  gap: 2,
+                  width: { xs: '100%', sm: 'auto' },
+                  minWidth: { xs: 0, sm: 200 }
+                }}
+              >
                 <TextField
                   size='small'
                   placeholder='Search clubs...'
                   value={globalFilter ?? ''}
                   onChange={e => setGlobalFilter(e.target.value)}
-                  className='is-full sm:is-auto min-is-[200px]'
+                  sx={{
+                    minWidth: { xs: 0, sm: 200 },
+                    flex: { xs: '1 1 auto', sm: '0 0 auto' }
+                  }}
                 />
-                <Button variant='contained' startIcon={<i className='ri-add-line' />} onClick={() => setAddDrawerOpen(true)}>
+                <Button
+                  variant='contained'
+                  startIcon={<i className='ri-add-line' />}
+                  onClick={() => setAddDrawerOpen(true)}
+                  sx={{ flexShrink: 0 }}
+                >
                   Add Club
                 </Button>
-              </div>
+              </Box>
             }
+            sx={{
+              flexDirection: { xs: 'column', sm: 'row' },
+              alignItems: { xs: 'stretch', sm: 'center' },
+              gap: 2,
+              '& .MuiCardHeader-action': {
+                margin: 0,
+                alignSelf: { xs: 'stretch', sm: 'center' },
+                width: { xs: '100%', sm: 'auto' }
+              }
+            }}
           />
           <Divider />
-          <div className='overflow-x-auto'>
-            <table className={tableStyles.table}>
-              <thead>
-                {table.getHeaderGroups().map(headerGroup => (
-                  <tr key={headerGroup.id}>
-                    {headerGroup.headers.map(header => (
-                      <th key={header.id}>
-                        {header.isPlaceholder ? null : (
-                          <div
-                            className={classnames({ 'cursor-pointer select-none': header.column.getCanSort() })}
-                            onClick={header.column.getToggleSortingHandler()}
+          {isMobile ? (
+            <div className='p-4 flex flex-col gap-4'>
+              {table.getFilteredRowModel().rows.length === 0 ? (
+                <Typography color='text.secondary' className='text-center py-8'>No clubs found</Typography>
+              ) : (
+                table.getRowModel().rows.map(row => {
+                  const club = row.original
+                  const statusColor = club.status === 'active' ? 'success' : club.status === 'pending' ? 'warning' : 'secondary'
+
+                  return (
+                    <Card
+                      key={club.id}
+                      elevation={0}
+                      variant='outlined'
+                      sx={{
+                        borderRadius: 2,
+                        transition: 'box-shadow 0.2s ease',
+                        '&:hover': { boxShadow: 1 }
+                      }}
+                    >
+                      <CardContent>
+                        <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 1, mb: 2 }}>
+                          <Box>
+                            <Typography variant='subtitle1' fontWeight={600} color='text.primary'>
+                              {club.name}
+                            </Typography>
+                            <Typography variant='caption' color='text.secondary'>
+                              {club.clubId} • {club.leagueName}
+                            </Typography>
+                          </Box>
+                          <Chip label={club.status} color={statusColor} size='small' variant='tonal' sx={{ textTransform: 'capitalize' }} />
+                        </Box>
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <i className='ri-map-pin-line text-base text-textSecondary' />
+                            <Typography variant='body2' color='text.secondary'>{club.city}</Typography>
+                          </Box>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <i className='ri-user-line text-base text-textSecondary' />
+                            <Typography variant='body2' color='text.secondary'>{club.adminFullName}</Typography>
+                          </Box>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <i className='ri-mail-line text-base text-textSecondary' />
+                            <Typography variant='body2' color='text.secondary' component='a' href={`mailto:${club.adminEmail}`} sx={{ color: 'text.secondary', textDecoration: 'none' }}>
+                              {club.adminEmail}
+                            </Typography>
+                          </Box>
+                        </Box>
+                        <Divider sx={{ my: 2 }} />
+                        <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
+                          <Button
+                            size='small'
+                            variant='outlined'
+                            startIcon={<i className='ri-edit-box-line' />}
+                            onClick={() => { setSelectedClub(club); setEditDrawerOpen(true) }}
                           >
-                            {flexRender(header.column.columnDef.header, header.getContext())}
-                          </div>
-                        )}
-                      </th>
-                    ))}
-                  </tr>
-                ))}
-              </thead>
-              <tbody>
-                {table.getFilteredRowModel().rows.length === 0 ? (
-                  <tr>
-                    <td colSpan={columns.length} className='text-center'>
-                      No clubs found
-                    </td>
-                  </tr>
-                ) : (
-                  table.getRowModel().rows.map(row => (
-                    <tr key={row.id}>
-                      {row.getVisibleCells().map(cell => (
-                        <td key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</td>
+                            Edit
+                          </Button>
+                          <Button
+                            size='small'
+                            variant='outlined'
+                            color='error'
+                            startIcon={<i className='ri-delete-bin-7-line' />}
+                            onClick={() => { setClubToDelete(club); setDeleteDialogOpen(true) }}
+                          >
+                            Delete
+                          </Button>
+                        </Box>
+                      </CardContent>
+                    </Card>
+                  )
+                })
+              )}
+            </div>
+          ) : (
+            <div className='overflow-x-auto'>
+              <table className={tableStyles.table}>
+                <thead>
+                  {table.getHeaderGroups().map(headerGroup => (
+                    <tr key={headerGroup.id}>
+                      {headerGroup.headers.map(header => (
+                        <th key={header.id}>
+                          {header.isPlaceholder ? null : (
+                            <div
+                              className={classnames({ 'cursor-pointer select-none': header.column.getCanSort() })}
+                              onClick={header.column.getToggleSortingHandler()}
+                            >
+                              {flexRender(header.column.columnDef.header, header.getContext())}
+                            </div>
+                          )}
+                        </th>
                       ))}
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                  ))}
+                </thead>
+                <tbody>
+                  {table.getFilteredRowModel().rows.length === 0 ? (
+                    <tr>
+                      <td colSpan={columns.length} className='text-center'>
+                        No clubs found
+                      </td>
+                    </tr>
+                  ) : (
+                    table.getRowModel().rows.map(row => (
+                      <tr key={row.id}>
+                        {row.getVisibleCells().map(cell => (
+                          <td key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</td>
+                        ))}
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
           <TablePagination
             rowsPerPageOptions={[5, 10, 25]}
             component='div'
@@ -258,84 +378,6 @@ const ClubList = () => {
         confirmColor='error'
       />
     </>
-  )
-}
-
-const AddClubDrawer = ({ open, onClose }) => {
-  const [formData, setFormData] = useState({ name: '', city: '', contactEmail: '', status: 'active' })
-
-  const handleSubmit = e => {
-    e.preventDefault()
-    onClose()
-    setFormData({ name: '', city: '', contactEmail: '', status: 'active' })
-  }
-
-  return (
-    <Drawer open={open} anchor='right' variant='temporary' onClose={onClose} ModalProps={{ keepMounted: true }} sx={{ '& .MuiDrawer-paper': { width: { xs: 300, sm: 400 } } }}>
-      <div className='flex items-center justify-between pli-5 plb-[15px]'>
-        <Typography variant='h5'>Add New Club</Typography>
-        <IconButton onClick={onClose} size='small'>
-          <i className='ri-close-line' />
-        </IconButton>
-      </div>
-      <Divider />
-      <div className='p-5'>
-        <form onSubmit={handleSubmit} className='flex flex-col gap-4'>
-          <TextField fullWidth label='Club Name' value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} />
-          <TextField fullWidth label='City' value={formData.city} onChange={e => setFormData({ ...formData, city: e.target.value })} />
-          <TextField fullWidth label='Contact Email' type='email' value={formData.contactEmail} onChange={e => setFormData({ ...formData, contactEmail: e.target.value })} />
-          <div className='flex gap-2'>
-            <Button type='submit' variant='contained'>Submit</Button>
-            <Button type='button' variant='outlined' color='secondary' onClick={onClose}>Cancel</Button>
-          </div>
-        </form>
-      </div>
-    </Drawer>
-  )
-}
-
-const EditClubDrawer = ({ open, onClose, club }) => {
-  const [formData, setFormData] = useState({ name: '', city: '', contactEmail: '', status: 'active' })
-
-  useEffect(() => {
-    if (club) {
-      setFormData({ name: club.name, city: club.city, contactEmail: club.contactEmail, status: club.status })
-    }
-  }, [club])
-
-  const handleSubmit = e => {
-    e.preventDefault()
-    onClose()
-  }
-
-  return (
-    <Drawer open={open} anchor='right' variant='temporary' onClose={onClose} ModalProps={{ keepMounted: true }} sx={{ '& .MuiDrawer-paper': { width: { xs: 300, sm: 400 } } }}>
-      <div className='flex items-center justify-between pli-5 plb-[15px]'>
-        <Typography variant='h5'>Edit Club</Typography>
-        <IconButton onClick={onClose} size='small'>
-          <i className='ri-close-line' />
-        </IconButton>
-      </div>
-      <Divider />
-      <div className='p-5'>
-        {club && (
-          <form onSubmit={handleSubmit} className='flex flex-col gap-4'>
-            <TextField fullWidth label='Club Name' value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} />
-            <TextField fullWidth label='City' value={formData.city} onChange={e => setFormData({ ...formData, city: e.target.value })} />
-            <TextField fullWidth label='Contact Email' type='email' value={formData.contactEmail} onChange={e => setFormData({ ...formData, contactEmail: e.target.value })} />
-            <TextField fullWidth select SelectProps={{ native: true }} label='Status' value={formData.status} onChange={e => setFormData({ ...formData, status: e.target.value })}>
-              <option value='active'>Active</option>
-              <option value='pending'>Pending</option>
-              <option value='inactive'>Inactive</option>
-            </TextField>
-            <div className='flex gap-2'>
-              <Button type='submit' variant='contained'>Save</Button>
-              <Button type='button' variant='outlined' color='secondary' onClick={onClose}>Cancel</Button>
-            </div>
-          </form>
-        )}
-      </div>
-    </Drawer>
   )
 }
 

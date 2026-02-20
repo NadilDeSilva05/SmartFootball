@@ -5,16 +5,17 @@ import { useState, useMemo, useEffect } from 'react'
 
 // MUI Imports
 import Card from '@mui/material/Card'
+import CardContent from '@mui/material/CardContent'
 import CardHeader from '@mui/material/CardHeader'
 import Divider from '@mui/material/Divider'
-import Drawer from '@mui/material/Drawer'
 import Button from '@mui/material/Button'
-import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import Chip from '@mui/material/Chip'
 import IconButton from '@mui/material/IconButton'
 import TablePagination from '@mui/material/TablePagination'
 import Alert from '@mui/material/Alert'
+import Box from '@mui/material/Box'
+import useMediaQuery from '@mui/material/useMediaQuery'
 
 // Third-party Imports
 import classnames from 'classnames'
@@ -32,18 +33,21 @@ import {
 import OptionMenu from '@core/components/option-menu'
 import HorizontalWithSubtitle from '@components/card-statistics/HorizontalWithSubtitle'
 import ConfirmationDialog from '@components/dialogs/confirmation-dialog'
+import AddCoachDrawer from '@views/club/components/coach/AddCoachDrawer'
+import EditCoachDrawer from '@views/club/components/coach/EditCoachDrawer'
 
 // Style Imports
 import tableStyles from '@core/styles/table.module.css'
+import { ROLE_OPTIONS } from '@views/club/constants'
 
 const COACHES_DATA = [
-  { id: '1', name: 'James Wilson', role: 'Head Coach', email: 'james@club.com', status: 'approved' },
-  { id: '2', name: 'Anna Lopez', role: 'Analyst', email: 'anna@club.com', status: 'approved' },
-  { id: '3', name: 'Michael Brown', role: 'Assistant Coach', email: 'michael@club.com', status: 'pending' }
+  { id: '1', coachId: 'CH-001', fullName: 'James Wilson', role: 'head_coach', license: 'A', nicOrPassport: '198512345678', dateOfBirth: '1985-03-20', status: 'approved' },
+  { id: '2', coachId: 'CH-002', fullName: 'Anna Lopez', role: 'analyst', license: null, nicOrPassport: '199012345679', dateOfBirth: '1990-07-15', status: 'approved' },
+  { id: '3', coachId: 'CH-003', fullName: 'Michael Brown', role: 'assistant_coach', license: 'C', nicOrPassport: 'PASS-123456', dateOfBirth: '1988-11-08', status: 'pending' }
 ]
 
 const CoachCardsData = [
-  { title: 'Total Coaches / Analysts', value: '8', avatarIcon: 'ri-user-star-line', avatarColor: 'primary', change: 'positive', changeNumber: '2%', subTitle: 'Staff' },
+  { title: 'Total Coaches', value: '8', avatarIcon: 'ri-user-star-line', avatarColor: 'primary', change: 'positive', changeNumber: '2%', subTitle: 'Staff' },
   { title: 'Approved', value: '6', avatarIcon: 'ri-checkbox-circle-line', avatarColor: 'success', change: 'positive', changeNumber: '1%', subTitle: 'Federation approved' },
   { title: 'Pending', value: '2', avatarIcon: 'ri-time-line', avatarColor: 'warning', change: 'negative', changeNumber: '0%', subTitle: 'Awaiting approval' }
 ]
@@ -59,19 +63,35 @@ const ClubCoachList = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [coachToDelete, setCoachToDelete] = useState(null)
   const [requestSent, setRequestSent] = useState(false)
+  const isMobile = useMediaQuery(theme => theme.breakpoints.down('md'))
 
   const columns = useMemo(
     () => [
-      columnHelper.accessor('name', {
-        header: 'Name',
+      columnHelper.accessor('coachId', { header: 'Coach Id', cell: ({ row }) => <Typography variant='body2'>{row.original.coachId}</Typography> }),
+      columnHelper.accessor('fullName', {
+        header: 'Full Name',
         cell: ({ row }) => (
           <Typography className='font-medium' color='text.primary'>
-            {row.original.name}
+            {row.original.fullName}
           </Typography>
         )
       }),
-      columnHelper.accessor('role', { header: 'Role', cell: ({ row }) => <Typography>{row.original.role}</Typography> }),
-      columnHelper.accessor('email', { header: 'Email', cell: ({ row }) => <Typography>{row.original.email}</Typography> }),
+      columnHelper.accessor('role', {
+        header: 'Role',
+        cell: ({ row }) => (
+          <Typography variant='body2'>{ROLE_OPTIONS.find(o => o.value === row.original.role)?.label ?? row.original.role}</Typography>
+        )
+      }),
+      columnHelper.accessor('license', {
+        header: 'License',
+        cell: ({ row }) => {
+          const c = row.original
+          if (c.role === 'analyst') return <Typography variant='body2' color='text.secondary'>–</Typography>
+          return <Chip variant='tonal' size='small' label={LICENSE_OPTIONS.find(o => o.value === c.license)?.label ?? c.license ?? '–'} color='primary' />
+        }
+      }),
+      columnHelper.accessor('nicOrPassport', { header: 'NIC / Passport', cell: ({ row }) => <Typography variant='body2'>{row.original.nicOrPassport}</Typography> }),
+      columnHelper.accessor('dateOfBirth', { header: 'DOB', cell: ({ row }) => <Typography variant='body2'>{row.original.dateOfBirth}</Typography> }),
       columnHelper.accessor('status', {
         header: 'Status',
         cell: ({ row }) => (
@@ -125,10 +145,10 @@ const ClubCoachList = () => {
       <div className='space-y-6'>
         <div>
           <Typography variant='h4' className='font-semibold mb-1'>
-            Coach / Analyst Management
+            Coach Management
           </Typography>
           <Typography variant='body1' color='text.secondary'>
-            Add, edit, and manage coaches and analysts. New staff are sent to federation admin for approval.
+            Add, edit, and manage coaches. New coaches are sent to federation admin for approval.
           </Typography>
         </div>
 
@@ -146,51 +166,127 @@ const ClubCoachList = () => {
 
         <Card>
           <CardHeader
-            title='Coaches & Analysts'
+            title='Coaches'
             action={
-              <div className='flex items-center gap-4 flex-wrap'>
-                <TextField size='small' placeholder='Search...' value={globalFilter ?? ''} onChange={e => setGlobalFilter(e.target.value)} className='is-full sm:is-auto min-is-[200px]' />
-                <Button variant='contained' startIcon={<i className='ri-add-line' />} onClick={() => setAddDrawerOpen(true)}>
-                  Add Coach / Analyst
+              <Box
+                sx={{
+                  display: 'flex',
+                  flexDirection: { xs: 'column', sm: 'row' },
+                  alignItems: { xs: 'stretch', sm: 'center' },
+                  gap: 2,
+                  width: { xs: '100%', sm: 'auto' },
+                  minWidth: { xs: 0, sm: 200 }
+                }}
+              >
+                <TextField
+                  size='small'
+                  placeholder='Search coaches...'
+                  value={globalFilter ?? ''}
+                  onChange={e => setGlobalFilter(e.target.value)}
+                  sx={{ minWidth: { xs: 0, sm: 200 }, flex: { xs: '1 1 auto', sm: '0 0 auto' } }}
+                />
+                <Button variant='contained' startIcon={<i className='ri-add-line' />} onClick={() => setAddDrawerOpen(true)} sx={{ flexShrink: 0 }}>
+                  Add Coach
                 </Button>
-              </div>
+              </Box>
             }
+            sx={{
+              flexDirection: { xs: 'column', sm: 'row' },
+              alignItems: { xs: 'stretch', sm: 'center' },
+              gap: 2,
+              '& .MuiCardHeader-action': { margin: 0, alignSelf: { xs: 'stretch', sm: 'center' }, width: { xs: '100%', sm: 'auto' } }
+            }}
           />
           <Divider />
-          <div className='overflow-x-auto'>
-            <table className={tableStyles.table}>
-              <thead>
-                {table.getHeaderGroups().map(headerGroup => (
-                  <tr key={headerGroup.id}>
-                    {headerGroup.headers.map(header => (
-                      <th key={header.id}>
-                        {header.isPlaceholder ? null : (
-                          <div className={classnames({ 'cursor-pointer select-none': header.column.getCanSort() })} onClick={header.column.getToggleSortingHandler()}>
-                            {flexRender(header.column.columnDef.header, header.getContext())}
-                          </div>
-                        )}
-                      </th>
-                    ))}
-                  </tr>
-                ))}
-              </thead>
-              <tbody>
-                {table.getFilteredRowModel().rows.length === 0 ? (
-                  <tr>
-                    <td colSpan={columns.length} className='text-center'>No coaches found</td>
-                  </tr>
-                ) : (
-                  table.getRowModel().rows.map(row => (
-                    <tr key={row.id}>
-                      {row.getVisibleCells().map(cell => (
-                        <td key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</td>
+          {isMobile ? (
+            <div className='p-4 flex flex-col gap-4'>
+              {table.getFilteredRowModel().rows.length === 0 ? (
+                <Typography color='text.secondary' className='text-center py-8'>No coaches found</Typography>
+              ) : (
+                table.getRowModel().rows.map(row => {
+                  const c = row.original
+                  const licenseLabel = LICENSE_OPTIONS.find(o => o.value === c.license)?.label ?? c.license
+                  return (
+                    <Card
+                      key={c.id}
+                      elevation={0}
+                      variant='outlined'
+                      sx={{ borderRadius: 2, transition: 'box-shadow 0.2s ease', '&:hover': { boxShadow: 1 } }}
+                    >
+                      <CardContent>
+                        <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 2, mb: 2 }}>
+                          <Box>
+                            <Typography variant='subtitle1' fontWeight={600} color='text.primary'>
+                              {c.fullName}
+                            </Typography>
+                            <Typography variant='caption' color='text.secondary'>
+                              {c.coachId} • {ROLE_OPTIONS.find(o => o.value === c.role)?.label ?? c.role}
+                              {c.role !== 'analyst' && ` • License: ${licenseLabel}`}
+                            </Typography>
+                          </Box>
+                          <Chip variant='tonal' size='small' label={c.status} color={c.status === 'approved' ? 'success' : 'warning'} />
+                        </Box>
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <i className='ri-id-card-line text-base text-textSecondary' />
+                            <Typography variant='body2' color='text.secondary'>NIC/Passport: {c.nicOrPassport}</Typography>
+                          </Box>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <i className='ri-calendar-line text-base text-textSecondary' />
+                            <Typography variant='body2' color='text.secondary'>DOB: {c.dateOfBirth}</Typography>
+                          </Box>
+                        </Box>
+                        <Divider sx={{ my: 2 }} />
+                        <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
+                          <Button size='small' variant='outlined' startIcon={<i className='ri-edit-box-line' />} onClick={() => { setSelectedCoach(c); setEditDrawerOpen(true) }}>
+                            Edit
+                          </Button>
+                          <Button size='small' variant='outlined' color='error' startIcon={<i className='ri-delete-bin-7-line' />} onClick={() => { setCoachToDelete(c); setDeleteDialogOpen(true) }}>
+                            Delete
+                          </Button>
+                        </Box>
+                      </CardContent>
+                    </Card>
+                  )
+                })
+              )}
+            </div>
+          ) : (
+            <div className='overflow-x-auto'>
+              <table className={tableStyles.table}>
+                <thead>
+                  {table.getHeaderGroups().map(headerGroup => (
+                    <tr key={headerGroup.id}>
+                      {headerGroup.headers.map(header => (
+                        <th key={header.id}>
+                          {header.isPlaceholder ? null : (
+                            <div className={classnames({ 'cursor-pointer select-none': header.column.getCanSort() })} onClick={header.column.getToggleSortingHandler()}>
+                              {flexRender(header.column.columnDef.header, header.getContext())}
+                            </div>
+                          )}
+                        </th>
                       ))}
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                  ))}
+                </thead>
+                <tbody>
+                  {table.getFilteredRowModel().rows.length === 0 ? (
+                    <tr>
+                      <td colSpan={columns.length} className='text-center'>No coaches found</td>
+                    </tr>
+                  ) : (
+                    table.getRowModel().rows.map(row => (
+                      <tr key={row.id}>
+                        {row.getVisibleCells().map(cell => (
+                          <td key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</td>
+                        ))}
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
           <TablePagination
             rowsPerPageOptions={[5, 10, 25]}
             component='div'
@@ -210,92 +306,12 @@ const ClubCoachList = () => {
         onClose={() => { setDeleteDialogOpen(false); setCoachToDelete(null) }}
         onConfirm={() => { setDeleteDialogOpen(false); setCoachToDelete(null) }}
         title='Delete Coach'
-        content={coachToDelete ? `Are you sure you want to remove "${coachToDelete.name}"?` : ''}
+        content={coachToDelete ? `Are you sure you want to remove "${coachToDelete.fullName}"?` : ''}
         confirmText='Delete'
         cancelText='Cancel'
         confirmColor='error'
       />
     </>
-  )
-}
-
-const AddCoachDrawer = ({ open, onClose, onRequestSent }) => {
-  const [formData, setFormData] = useState({ name: '', role: 'Coach', email: '' })
-
-  const handleSubmit = e => {
-    e.preventDefault()
-    onRequestSent()
-    setFormData({ name: '', role: 'Coach', email: '' })
-  }
-
-  return (
-    <Drawer open={open} anchor='right' variant='temporary' onClose={onClose} ModalProps={{ keepMounted: true }} sx={{ '& .MuiDrawer-paper': { width: { xs: 300, sm: 400 } } }}>
-      <div className='flex items-center justify-between pli-5 plb-[15px]'>
-        <Typography variant='h5'>Add Coach / Analyst (Request to Federation)</Typography>
-        <IconButton onClick={onClose} size='small'><i className='ri-close-line' /></IconButton>
-      </div>
-      <Divider />
-      <div className='p-5'>
-        <Typography variant='body2' color='text.secondary' sx={{ mb: 2 }}>
-          This will send a registration request to the federation admin for approval.
-        </Typography>
-        <form onSubmit={handleSubmit} className='flex flex-col gap-4'>
-          <TextField fullWidth label='Full Name' value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} required />
-          <TextField fullWidth select SelectProps={{ native: true }} label='Role' value={formData.role} onChange={e => setFormData({ ...formData, role: e.target.value })}>
-            <option value='Head Coach'>Head Coach</option>
-            <option value='Assistant Coach'>Assistant Coach</option>
-            <option value='Analyst'>Analyst</option>
-            <option value='Coach'>Coach</option>
-          </TextField>
-          <TextField fullWidth label='Email' type='email' value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} />
-          <div className='flex gap-2'>
-            <Button type='submit' variant='contained'>Send Request to Federation</Button>
-            <Button type='button' variant='outlined' color='secondary' onClick={onClose}>Cancel</Button>
-          </div>
-        </form>
-      </div>
-    </Drawer>
-  )
-}
-
-const EditCoachDrawer = ({ open, onClose, coach }) => {
-  const [formData, setFormData] = useState({ name: '', role: 'Coach', email: '' })
-
-  useEffect(() => {
-    if (coach) setFormData({ name: coach.name, role: coach.role, email: coach.email })
-  }, [coach])
-
-  const handleSubmit = e => {
-    e.preventDefault()
-    onClose()
-  }
-
-  return (
-    <Drawer open={open} anchor='right' variant='temporary' onClose={onClose} ModalProps={{ keepMounted: true }} sx={{ '& .MuiDrawer-paper': { width: { xs: 300, sm: 400 } } }}>
-      <div className='flex items-center justify-between pli-5 plb-[15px]'>
-        <Typography variant='h5'>Edit Coach / Analyst</Typography>
-        <IconButton onClick={onClose} size='small'><i className='ri-close-line' /></IconButton>
-      </div>
-      <Divider />
-      <div className='p-5'>
-        {coach && (
-          <form onSubmit={handleSubmit} className='flex flex-col gap-4'>
-            <TextField fullWidth label='Full Name' value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} />
-            <TextField fullWidth select SelectProps={{ native: true }} label='Role' value={formData.role} onChange={e => setFormData({ ...formData, role: e.target.value })}>
-              <option value='Head Coach'>Head Coach</option>
-              <option value='Assistant Coach'>Assistant Coach</option>
-              <option value='Analyst'>Analyst</option>
-              <option value='Coach'>Coach</option>
-            </TextField>
-            <TextField fullWidth label='Email' type='email' value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} />
-            <div className='flex gap-2'>
-              <Button type='submit' variant='contained'>Save</Button>
-              <Button type='button' variant='outlined' color='secondary' onClick={onClose}>Cancel</Button>
-            </div>
-          </form>
-        )}
-      </div>
-    </Drawer>
   )
 }
 

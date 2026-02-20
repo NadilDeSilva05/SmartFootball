@@ -7,7 +7,6 @@ import { useState, useMemo, useEffect } from 'react'
 import Card from '@mui/material/Card'
 import CardHeader from '@mui/material/CardHeader'
 import Divider from '@mui/material/Divider'
-import Drawer from '@mui/material/Drawer'
 import Button from '@mui/material/Button'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
@@ -15,6 +14,8 @@ import Chip from '@mui/material/Chip'
 import IconButton from '@mui/material/IconButton'
 import TablePagination from '@mui/material/TablePagination'
 import Alert from '@mui/material/Alert'
+import CardContent from '@mui/material/CardContent'
+import useMediaQuery from '@mui/material/useMediaQuery'
 
 // Third-party Imports
 import classnames from 'classnames'
@@ -29,17 +30,20 @@ import {
 } from '@tanstack/react-table'
 
 // Component Imports
+import CustomAvatar from '@core/components/mui/Avatar'
 import OptionMenu from '@core/components/option-menu'
 import HorizontalWithSubtitle from '@components/card-statistics/HorizontalWithSubtitle'
 import ConfirmationDialog from '@components/dialogs/confirmation-dialog'
+import AddPlayerDrawer from '@views/club/components/player/AddPlayerDrawer'
+import EditPlayerDrawer from '@views/club/components/player/EditPlayerDrawer'
 
 // Style Imports
 import tableStyles from '@core/styles/table.module.css'
 
 const PLAYERS_DATA = [
-  { id: '1', name: 'John Silva', jerseyNo: '10', position: 'Forward', status: 'approved' },
-  { id: '2', name: 'Maria Perera', jerseyNo: '7', position: 'Midfielder', status: 'approved' },
-  { id: '3', name: 'David Fernando', jerseyNo: '1', position: 'Goalkeeper', status: 'pending' }
+  { id: '1', playerId: 'PLR-001', fullName: 'John Silva', commentaryName: 'J. Silva', jerseyNo: '10', nicOrPassport: '199012345678', dateOfBirth: '1990-05-15', residentStatus: 'local', visaNo: '', position: 'Forward', photo: null, status: 'approved' },
+  { id: '2', playerId: 'PLR-002', fullName: 'Maria Perera', commentaryName: 'M. Perera', jerseyNo: '7', nicOrPassport: '199512345679', dateOfBirth: '1995-08-22', residentStatus: 'local', visaNo: '', position: 'Midfielder', photo: null, status: 'approved' },
+  { id: '3', playerId: 'PLR-003', fullName: 'David Fernando', commentaryName: 'D. Fernando', jerseyNo: '1', nicOrPassport: 'PASS-987654', dateOfBirth: '1992-01-10', residentStatus: 'foreign', visaNo: 'V-2024-001', position: 'Goalkeeper', photo: null, status: 'pending' }
 ]
 
 const PlayerCardsData = [
@@ -59,19 +63,43 @@ const ClubPlayerList = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [playerToDelete, setPlayerToDelete] = useState(null)
   const [requestSent, setRequestSent] = useState(false)
+  const isMobile = useMediaQuery(theme => theme.breakpoints.down('md'))
 
   const columns = useMemo(
     () => [
-      columnHelper.accessor('name', {
-        header: 'Player Name',
+      columnHelper.accessor('photo', {
+        header: '',
+        cell: ({ row }) => {
+          const p = row.original
+          const initials = p.fullName?.split(' ').map(n => n[0]).join('').slice(0, 2) || '?'
+          return (
+            <CustomAvatar src={p.photo} size={36} color='primary' skin='light'>
+              {initials}
+            </CustomAvatar>
+          )
+        },
+        enableSorting: false
+      }),
+      columnHelper.accessor('playerId', { header: 'Player Id', cell: ({ row }) => <Typography variant='body2'>{row.original.playerId}</Typography> }),
+      columnHelper.accessor('fullName', {
+        header: 'Full Name',
         cell: ({ row }) => (
           <Typography className='font-medium' color='text.primary'>
-            {row.original.name}
+            {row.original.fullName}
           </Typography>
         )
       }),
-      columnHelper.accessor('jerseyNo', { header: 'Jersey No', cell: ({ row }) => <Typography>{row.original.jerseyNo}</Typography> }),
-      columnHelper.accessor('position', { header: 'Position', cell: ({ row }) => <Typography>{row.original.position}</Typography> }),
+      columnHelper.accessor('commentaryName', { header: 'Commentary Name', cell: ({ row }) => <Typography variant='body2'>{row.original.commentaryName || '–'}</Typography> }),
+      columnHelper.accessor('nicOrPassport', { header: 'NIC / Passport', cell: ({ row }) => <Typography variant='body2'>{row.original.nicOrPassport}</Typography> }),
+      columnHelper.accessor('dateOfBirth', { header: 'DOB', cell: ({ row }) => <Typography variant='body2'>{row.original.dateOfBirth}</Typography> }),
+      columnHelper.accessor('residentStatus', {
+        header: 'Resident',
+        cell: ({ row }) => (
+          <Chip variant='tonal' size='small' label={row.original.residentStatus === 'foreign' ? 'Foreign' : 'Local'} color={row.original.residentStatus === 'foreign' ? 'secondary' : 'default'} />
+        )
+      }),
+      columnHelper.accessor('position', { header: 'Position', cell: ({ row }) => <Typography variant='body2'>{row.original.position}</Typography> }),
+      columnHelper.accessor('jerseyNo', { header: 'Jersey No', cell: ({ row }) => <Typography variant='body2'>{row.original.jerseyNo || '–'}</Typography> }),
       columnHelper.accessor('status', {
         header: 'Status',
         cell: ({ row }) => (
@@ -176,23 +204,133 @@ const ClubPlayerList = () => {
           <CardHeader
             title='Players'
             action={
-              <div className='flex items-center gap-4 flex-wrap'>
+              <Box
+                sx={{
+                  display: 'flex',
+                  flexDirection: { xs: 'column', sm: 'row' },
+                  alignItems: { xs: 'stretch', sm: 'center' },
+                  gap: 2,
+                  width: { xs: '100%', sm: 'auto' },
+                  minWidth: { xs: 0, sm: 200 }
+                }}
+              >
                 <TextField
                   size='small'
                   placeholder='Search players...'
                   value={globalFilter ?? ''}
                   onChange={e => setGlobalFilter(e.target.value)}
-                  className='is-full sm:is-auto min-is-[200px]'
+                  sx={{ minWidth: { xs: 0, sm: 200 }, flex: { xs: '1 1 auto', sm: '0 0 auto' } }}
                 />
-                <Button variant='contained' startIcon={<i className='ri-add-line' />} onClick={() => setAddDrawerOpen(true)}>
+                <Button variant='contained' startIcon={<i className='ri-add-line' />} onClick={() => setAddDrawerOpen(true)} sx={{ flexShrink: 0 }}>
                   Add Player
                 </Button>
-              </div>
+              </Box>
             }
+            sx={{
+              flexDirection: { xs: 'column', sm: 'row' },
+              alignItems: { xs: 'stretch', sm: 'center' },
+              gap: 2,
+              '& .MuiCardHeader-action': {
+                margin: 0,
+                alignSelf: { xs: 'stretch', sm: 'center' },
+                width: { xs: '100%', sm: 'auto' }
+              }
+            }}
           />
           <Divider />
-          <div className='overflow-x-auto'>
-            <table className={tableStyles.table}>
+          {isMobile ? (
+            <div className='p-4 flex flex-col gap-4'>
+              {table.getFilteredRowModel().rows.length === 0 ? (
+                <Typography color='text.secondary' className='text-center py-8'>No players found</Typography>
+              ) : (
+                table.getRowModel().rows.map(row => {
+                  const p = row.original
+                  const initials = p.fullName?.split(' ').map(n => n[0]).join('').slice(0, 2) || '?'
+                  return (
+                    <Card
+                      key={p.id}
+                      elevation={0}
+                      variant='outlined'
+                      sx={{
+                        borderRadius: 2,
+                        transition: 'box-shadow 0.2s ease',
+                        '&:hover': { boxShadow: 1 }
+                      }}
+                    >
+                      <CardContent>
+                        <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 2, mb: 2 }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                            <CustomAvatar src={p.photo} size={44} color='primary' skin='light'>
+                              {initials}
+                            </CustomAvatar>
+                            <Box>
+                              <Typography variant='subtitle1' fontWeight={600} color='text.primary'>
+                                {p.fullName}
+                              </Typography>
+                              <Typography variant='caption' color='text.secondary'>
+                                {p.playerId} • #{p.jerseyNo || '–'} • {p.position}
+                              </Typography>
+                            </Box>
+                          </Box>
+                          <Chip
+                            variant='tonal'
+                            size='small'
+                            label={p.status}
+                            color={p.status === 'approved' ? 'success' : 'warning'}
+                          />
+                        </Box>
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                          {p.commentaryName && (
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <i className='ri-user-voice-line text-base text-textSecondary' />
+                              <Typography variant='body2' color='text.secondary'>Commentary: {p.commentaryName}</Typography>
+                            </Box>
+                          )}
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <i className='ri-id-card-line text-base text-textSecondary' />
+                            <Typography variant='body2' color='text.secondary'>NIC/Passport: {p.nicOrPassport}</Typography>
+                          </Box>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <i className='ri-calendar-line text-base text-textSecondary' />
+                            <Typography variant='body2' color='text.secondary'>DOB: {p.dateOfBirth}</Typography>
+                          </Box>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <i className='ri-map-pin-user-line text-base text-textSecondary' />
+                            <Typography variant='body2' color='text.secondary'>
+                              {p.residentStatus === 'foreign' ? 'Foreign' : 'Local'}
+                              {p.residentStatus === 'foreign' && p.visaNo ? ` (Visa: ${p.visaNo})` : ''}
+                            </Typography>
+                          </Box>
+                        </Box>
+                        <Divider sx={{ my: 2 }} />
+                        <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
+                          <Button
+                            size='small'
+                            variant='outlined'
+                            startIcon={<i className='ri-edit-box-line' />}
+                            onClick={() => { setSelectedPlayer(p); setEditDrawerOpen(true) }}
+                          >
+                            Edit
+                          </Button>
+                          <Button
+                            size='small'
+                            variant='outlined'
+                            color='error'
+                            startIcon={<i className='ri-delete-bin-7-line' />}
+                            onClick={() => { setPlayerToDelete(p); setDeleteDialogOpen(true) }}
+                          >
+                            Delete
+                          </Button>
+                        </Box>
+                      </CardContent>
+                    </Card>
+                  )
+                })
+              )}
+            </div>
+          ) : (
+            <div className='overflow-x-auto'>
+              <table className={tableStyles.table}>
               <thead>
                 {table.getHeaderGroups().map(headerGroup => (
                   <tr key={headerGroup.id}>
@@ -230,6 +368,7 @@ const ClubPlayerList = () => {
               </tbody>
             </table>
           </div>
+          )}
           <TablePagination
             rowsPerPageOptions={[5, 10, 25]}
             component='div'
@@ -267,109 +406,12 @@ const ClubPlayerList = () => {
         }}
         onConfirm={handleDeleteConfirm}
         title='Delete Player'
-        content={playerToDelete ? `Are you sure you want to remove "${playerToDelete.name}" from the club?` : ''}
+        content={playerToDelete ? `Are you sure you want to remove "${playerToDelete.fullName}" from the club?` : ''}
         confirmText='Delete'
         cancelText='Cancel'
         confirmColor='error'
       />
     </>
-  )
-}
-
-const AddPlayerDrawer = ({ open, onClose, onRequestSent }) => {
-  const [formData, setFormData] = useState({ name: '', jerseyNo: '', position: 'Forward', dob: '', idNumber: '' })
-
-  const handleSubmit = e => {
-    e.preventDefault()
-    onRequestSent()
-    setFormData({ name: '', jerseyNo: '', position: 'Forward', dob: '', idNumber: '' })
-  }
-
-  return (
-    <Drawer
-      open={open}
-      anchor='right'
-      variant='temporary'
-      onClose={onClose}
-      ModalProps={{ keepMounted: true }}
-      sx={{ '& .MuiDrawer-paper': { width: { xs: 300, sm: 400 } } }}
-    >
-      <div className='flex items-center justify-between pli-5 plb-[15px]'>
-        <Typography variant='h5'>Add Player (Request to Federation)</Typography>
-        <IconButton onClick={onClose} size='small'>
-          <i className='ri-close-line' />
-        </IconButton>
-      </div>
-      <Divider />
-      <div className='p-5'>
-        <Typography variant='body2' color='text.secondary' sx={{ mb: 2 }}>
-          This will send a registration request to the federation admin for approval.
-        </Typography>
-        <form onSubmit={handleSubmit} className='flex flex-col gap-4'>
-          <TextField fullWidth label='Full Name' value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} required />
-          <TextField fullWidth label='Jersey Number' value={formData.jerseyNo} onChange={e => setFormData({ ...formData, jerseyNo: e.target.value })} />
-          <TextField fullWidth select SelectProps={{ native: true }} label='Position' value={formData.position} onChange={e => setFormData({ ...formData, position: e.target.value })}>
-            <option value='Goalkeeper'>Goalkeeper</option>
-            <option value='Defender'>Defender</option>
-            <option value='Midfielder'>Midfielder</option>
-            <option value='Forward'>Forward</option>
-          </TextField>
-          <TextField fullWidth label='Date of Birth' type='date' value={formData.dob} onChange={e => setFormData({ ...formData, dob: e.target.value })} InputLabelProps={{ shrink: true }} />
-          <TextField fullWidth label='ID / Passport Number' value={formData.idNumber} onChange={e => setFormData({ ...formData, idNumber: e.target.value })} />
-          <div className='flex gap-2'>
-            <Button type='submit' variant='contained'>
-              Send Request to Federation
-            </Button>
-            <Button type='button' variant='outlined' color='secondary' onClick={onClose}>
-              Cancel
-            </Button>
-          </div>
-        </form>
-      </div>
-    </Drawer>
-  )
-}
-
-const EditPlayerDrawer = ({ open, onClose, player }) => {
-  const [formData, setFormData] = useState({ name: '', jerseyNo: '', position: 'Forward' })
-
-  useEffect(() => {
-    if (player) setFormData({ name: player.name, jerseyNo: player.jerseyNo, position: player.position })
-  }, [player])
-
-  const handleSubmit = e => {
-    e.preventDefault()
-    onClose()
-  }
-
-  return (
-    <Drawer open={open} anchor='right' variant='temporary' onClose={onClose} ModalProps={{ keepMounted: true }} sx={{ '& .MuiDrawer-paper': { width: { xs: 300, sm: 400 } } }}>
-      <div className='flex items-center justify-between pli-5 plb-[15px]'>
-        <Typography variant='h5'>Edit Player</Typography>
-        <IconButton onClick={onClose} size='small'>
-          <i className='ri-close-line' />
-        </IconButton>
-      </div>
-      <Divider />
-      <div className='p-5'>
-        {player && (
-          <form onSubmit={handleSubmit} className='flex flex-col gap-4'>
-            <TextField fullWidth label='Full Name' value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} />
-            <TextField fullWidth label='Jersey Number' value={formData.jerseyNo} onChange={e => setFormData({ ...formData, jerseyNo: e.target.value })} />
-            <TextField fullWidth select SelectProps={{ native: true }} label='Position' value={formData.position} onChange={e => setFormData({ ...formData, position: e.target.value })}>
-              <option value='Goalkeeper'>Goalkeeper</option>
-              <option value='Defender'>Defender</option>
-              <option value='Midfielder'>Midfielder</option>
-              <option value='Forward'>Forward</option>
-            </TextField>
-            <div className='flex gap-2'>
-              <Button type='submit' variant='contained'>Save</Button>
-              <Button type='button' variant='outlined' color='secondary' onClick={onClose}>Cancel</Button>
-            </div>
-          </form>
-        )}
-      </div>
-    </Drawer>
   )
 }
 
