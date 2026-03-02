@@ -1,11 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Box from '@mui/material/Box'
+import CircularProgress from '@mui/material/CircularProgress'
 import Dialog from '@mui/material/Dialog'
 import DialogTitle from '@mui/material/DialogTitle'
 import DialogContent from '@mui/material/DialogContent'
-import Divider from '@mui/material/Divider'
 import IconButton from '@mui/material/IconButton'
 import Tab from '@mui/material/Tab'
 import Tabs from '@mui/material/Tabs'
@@ -17,71 +17,34 @@ import TableHead from '@mui/material/TableHead'
 import TableRow from '@mui/material/TableRow'
 import Typography from '@mui/material/Typography'
 
-const STANDINGS_BY_LEAGUE = {
-  '1': [
-    { position: 1, team: 'City FC', played: 14, won: 10, draw: 2, lost: 2, goalsFor: 28, goalsAgainst: 12, goalDiff: 16, points: 32 },
-    { position: 2, team: 'United SC', played: 14, won: 9, draw: 3, lost: 2, goalsFor: 26, goalsAgainst: 14, goalDiff: 12, points: 30 },
-    { position: 3, team: 'Rovers FC', played: 14, won: 7, draw: 4, lost: 3, goalsFor: 22, goalsAgainst: 16, goalDiff: 6, points: 25 },
-    { position: 4, team: 'Athletic Club', played: 14, won: 6, draw: 3, lost: 5, goalsFor: 20, goalsAgainst: 19, goalDiff: 1, points: 21 },
-    { position: 5, team: 'Stars FC', played: 14, won: 4, draw: 4, lost: 6, goalsFor: 18, goalsAgainst: 22, goalDiff: -4, points: 16 },
-    { position: 6, team: 'Dynamo FC', played: 14, won: 1, draw: 2, lost: 11, goalsFor: 10, goalsAgainst: 31, goalDiff: -21, points: 5 }
-  ],
-  '2': [
-    { position: 1, team: 'Eagles FC', played: 12, won: 8, draw: 2, lost: 2, goalsFor: 24, goalsAgainst: 10, goalDiff: 14, points: 26 },
-    { position: 2, team: 'Lions SC', played: 12, won: 7, draw: 2, lost: 3, goalsFor: 20, goalsAgainst: 14, goalDiff: 6, points: 23 },
-    { position: 3, team: 'Tigers FC', played: 12, won: 5, draw: 4, lost: 3, goalsFor: 18, goalsAgainst: 15, goalDiff: 3, points: 19 }
-  ],
-  '3': [],
-  '4': [
-    { position: 1, team: 'City FC', played: 20, won: 14, draw: 4, lost: 2, goalsFor: 42, goalsAgainst: 18, goalDiff: 24, points: 46 },
-    { position: 2, team: 'Rovers FC', played: 20, won: 12, draw: 5, lost: 3, goalsFor: 38, goalsAgainst: 22, goalDiff: 16, points: 41 }
-  ]
-}
-
-const TOP_SCORERS_BY_LEAGUE = {
-  '1': [
-    { position: 1, player: 'A. Silva', team: 'City FC', goals: 12 },
-    { position: 2, player: 'B. Fernando', team: 'United SC', goals: 10 },
-    { position: 3, player: 'C. Perera', team: 'Rovers FC', goals: 9 },
-    { position: 4, player: 'D. Gomes', team: 'Athletic Club', goals: 7 },
-    { position: 5, player: 'E. Wilson', team: 'Stars FC', goals: 6 }
-  ],
-  '2': [
-    { position: 1, player: 'F. Martinez', team: 'Eagles FC', goals: 8 },
-    { position: 2, player: 'G. Rodriguez', team: 'Lions SC', goals: 6 }
-  ],
-  '3': [],
-  '4': [
-    { position: 1, player: 'A. Silva', team: 'City FC', goals: 15 },
-    { position: 2, player: 'H. Brown', team: 'Rovers FC', goals: 11 }
-  ]
-}
-
-const TOP_ASSISTS_BY_LEAGUE = {
-  '1': [
-    { position: 1, player: 'J. Clark', team: 'City FC', assists: 9 },
-    { position: 2, player: 'K. White', team: 'United SC', assists: 8 },
-    { position: 3, player: 'L. Green', team: 'Rovers FC', assists: 6 },
-    { position: 4, player: 'M. Hall', team: 'Athletic Club', assists: 5 },
-    { position: 5, player: 'N. Lee', team: 'Stars FC', assists: 4 }
-  ],
-  '2': [
-    { position: 1, player: 'P. Davis', team: 'Eagles FC', assists: 5 },
-    { position: 2, player: 'Q. Taylor', team: 'Lions SC', assists: 4 }
-  ],
-  '3': [],
-  '4': [
-    { position: 1, player: 'J. Clark', team: 'City FC', assists: 10 },
-    { position: 2, player: 'R. Moore', team: 'Rovers FC', assists: 7 }
-  ]
-}
-
 export default function StandingsModal ({ open, onClose, league }) {
   const [tabValue, setTabValue] = useState(0)
+  const [standings, setStandings] = useState([])
+  const [topScorers, setTopScorers] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [topAssists] = useState([])
   const leagueId = league?.id
-  const standings = leagueId ? (STANDINGS_BY_LEAGUE[leagueId] || []) : []
-  const topScorers = leagueId ? (TOP_SCORERS_BY_LEAGUE[leagueId] || []) : []
-  const topAssists = leagueId ? (TOP_ASSISTS_BY_LEAGUE[leagueId] || []) : []
+
+  const fetchStandings = useCallback(async () => {
+    if (!leagueId || !open) return
+    setLoading(true)
+    try {
+      const url = leagueId ? `/api/standings?leagueId=${encodeURIComponent(leagueId)}` : '/api/standings'
+      const res = await fetch(url, { cache: 'no-store' })
+      const data = await res.json().catch(() => ({}))
+      setStandings(Array.isArray(data.standings) ? data.standings : [])
+      setTopScorers(Array.isArray(data.topScorers) ? data.topScorers : [])
+    } catch {
+      setStandings([])
+      setTopScorers([])
+    } finally {
+      setLoading(false)
+    }
+  }, [leagueId, open])
+
+  useEffect(() => {
+    if (open && leagueId) fetchStandings()
+  }, [open, leagueId, fetchStandings])
 
   const handleClose = () => {
     setTabValue(0)
@@ -119,6 +82,11 @@ export default function StandingsModal ({ open, onClose, league }) {
       <DialogContent sx={{ p: 0 }}>
         {tabValue === 0 && (
           <TableContainer sx={{ maxHeight: 440 }}>
+            {loading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', py: 6 }}>
+                <CircularProgress size={32} />
+              </Box>
+            ) : (
             <Table stickyHeader size='small'>
               <TableHead>
                 <TableRow sx={{ bgcolor: 'action.hover' }}>
@@ -142,7 +110,7 @@ export default function StandingsModal ({ open, onClose, league }) {
                 ) : (
                   standings.map(row => (
                     <TableRow
-                      key={row.team}
+                      key={row.clubId || row.team || row.position}
                       sx={{
                         '&:nth-of-type(even)': { bgcolor: 'action.hover' },
                         '&:hover': { bgcolor: 'action.selected' }
@@ -163,6 +131,7 @@ export default function StandingsModal ({ open, onClose, league }) {
                 )}
               </TableBody>
             </Table>
+            )}
           </TableContainer>
         )}
         {tabValue === 1 && (

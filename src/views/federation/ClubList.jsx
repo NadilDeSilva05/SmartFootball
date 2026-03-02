@@ -1,7 +1,7 @@
 'use client'
 
 // React Imports
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 
 // MUI Imports
 import Box from '@mui/material/Box'
@@ -16,6 +16,8 @@ import Chip from '@mui/material/Chip'
 import IconButton from '@mui/material/IconButton'
 import TablePagination from '@mui/material/TablePagination'
 import useMediaQuery from '@mui/material/useMediaQuery'
+import Alert from '@mui/material/Alert'
+import CircularProgress from '@mui/material/CircularProgress'
 
 // Third-party Imports
 import classnames from 'classnames'
@@ -39,35 +41,103 @@ import EditClubDrawer from '@views/federation/components/club/EditClubDrawer'
 // Style Imports
 import tableStyles from '@core/styles/table.module.css'
 
-// Hardcoded data
-const CLUBS_DATA = [
-  { id: '1', clubId: 'CLB-001', name: 'City FC', city: 'Colombo', league: '1', leagueName: 'Premier League', adminFullName: 'John Silva', adminEmail: 'admin@cityfc.com', status: 'active' },
-  { id: '2', clubId: 'CLB-002', name: 'United SC', city: 'Kandy', league: '1', leagueName: 'Premier League', adminFullName: 'David Fernando', adminEmail: 'info@unitedsc.com', status: 'active' },
-  { id: '3', clubId: 'CLB-003', name: 'Rovers FC', city: 'Galle', league: '2', leagueName: 'Division One', adminFullName: 'Maria Perera', adminEmail: 'contact@roversfc.com', status: 'pending' },
-  { id: '4', clubId: 'CLB-004', name: 'Athletic Club', city: 'Jaffna', league: '3', leagueName: 'Regional Cup', adminFullName: 'Michael Brown', adminEmail: 'admin@athletic.com', status: 'inactive' }
-]
-
-const ClubCardsData = [
-  { title: 'Total Clubs', value: '24', avatarIcon: 'ri-building-line', avatarColor: 'primary', change: 'positive', changeNumber: '12%', subTitle: 'Registered clubs' },
-  { title: 'Active', value: '18', avatarIcon: 'ri-checkbox-circle-line', avatarColor: 'success', change: 'positive', changeNumber: '8%', subTitle: 'Active clubs' },
-  { title: 'Pending', value: '4', avatarIcon: 'ri-time-line', avatarColor: 'warning', change: 'negative', changeNumber: '2%', subTitle: 'Pending approval' },
-  { title: 'Inactive', value: '2', avatarIcon: 'ri-close-circle-line', avatarColor: 'error', change: 'negative', changeNumber: '1%', subTitle: 'Inactive clubs' }
-]
-
 const columnHelper = createColumnHelper()
 
 const ClubList = () => {
-  const [data] = useState(CLUBS_DATA)
+  const [clubs, setClubs] = useState([])
+  const [leagues, setLeagues] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [globalFilter, setGlobalFilter] = useState('')
   const [addDrawerOpen, setAddDrawerOpen] = useState(false)
   const [editDrawerOpen, setEditDrawerOpen] = useState(false)
   const [selectedClub, setSelectedClub] = useState(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [clubToDelete, setClubToDelete] = useState(null)
+  const [deleting, setDeleting] = useState(false)
   const isMobile = useMediaQuery(theme => theme.breakpoints.down('md'))
+
+  const fetchClubs = useCallback(async () => {
+    try {
+      const res = await fetch('/api/clubs')
+      if (!res.ok) throw new Error('Failed to fetch clubs')
+      const data = await res.json()
+      setClubs(data)
+    } catch (e) {
+      setError(e.message)
+      setClubs([])
+    }
+  }, [])
+
+  const fetchLeagues = useCallback(async () => {
+    try {
+      const res = await fetch('/api/leagues')
+      if (!res.ok) return
+      const data = await res.json()
+      setLeagues(data)
+    } catch {
+      setLeagues([])
+    }
+  }, [])
+
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true)
+      setError(null)
+      await Promise.all([fetchClubs(), fetchLeagues()])
+      setLoading(false)
+    }
+    load()
+  }, [fetchClubs, fetchLeagues])
+
+  useEffect(() => {
+    if (addDrawerOpen) fetchLeagues()
+  }, [addDrawerOpen, fetchLeagues])
+
+  const leagueMap = useMemo(() => {
+    const m = {}
+    leagues.forEach(l => { m[l.id] = l.name })
+    return m
+  }, [leagues])
+
+  const data = useMemo(() => clubs.map(c => ({
+    ...c,
+    name: c.clubName,
+    leagueName: leagueMap[c.league] || c.league || '-'
+  })), [clubs, leagueMap])
+
+  const totalClubs = clubs.length
+  const activeCount = clubs.filter(c => c.status === 'active').length
+  const pendingCount = clubs.filter(c => c.status === 'pending').length
+  const inactiveCount = clubs.filter(c => c.status === 'inactive').length
+
+  const clubCardsData = [
+    { title: 'Total Clubs', value: String(totalClubs), avatarIcon: 'ri-building-line', avatarColor: 'primary', change: 'positive', changeNumber: '0', subTitle: 'Registered clubs' },
+    { title: 'Active', value: String(activeCount), avatarIcon: 'ri-checkbox-circle-line', avatarColor: 'success', change: 'positive', changeNumber: '0', subTitle: 'Active clubs' },
+    { title: 'Pending', value: String(pendingCount), avatarIcon: 'ri-time-line', avatarColor: 'warning', change: 'positive', changeNumber: '0', subTitle: 'Pending approval' },
+    { title: 'Inactive', value: String(inactiveCount), avatarIcon: 'ri-close-circle-line', avatarColor: 'error', change: 'negative', changeNumber: '0', subTitle: 'Inactive clubs' }
+  ]
 
   const columns = useMemo(
     () => [
+      columnHelper.accessor('logo', {
+        header: 'Logo',
+        cell: ({ row }) => {
+          const logo = row.original.logo
+          return logo && typeof logo === 'string' ? (
+            <Box
+              component='img'
+              src={logo}
+              alt={row.original.clubName || 'Club logo'}
+              sx={{ width: 40, height: 40, borderRadius: 1, objectFit: 'contain', border: '1px solid', borderColor: 'divider', bgcolor: 'action.hover' }}
+            />
+          ) : (
+            <Box sx={{ width: 40, height: 40, borderRadius: 1, bgcolor: 'action.hover', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <i className='ri-building-line text-xl text-textSecondary' />
+            </Box>
+          )
+        }
+      }),
       columnHelper.accessor('clubId', {
         header: 'Club ID',
         cell: ({ row }) => <Typography variant='body2'>{row.original.clubId || '-'}</Typography>
@@ -76,13 +146,13 @@ const ClubList = () => {
         header: 'Club Name',
         cell: ({ row }) => (
           <Typography className='font-medium' color='text.primary'>
-            {row.original.name}
+            {row.original.clubName || row.original.name}
           </Typography>
         )
       }),
       columnHelper.accessor('city', {
         header: 'City',
-        cell: ({ row }) => <Typography variant='body2'>{row.original.city}</Typography>
+        cell: ({ row }) => <Typography variant='body2'>{row.original.city || '-'}</Typography>
       }),
       columnHelper.accessor('leagueName', {
         header: 'League',
@@ -102,7 +172,7 @@ const ClubList = () => {
           <Chip
             variant='tonal'
             className='capitalize'
-            label={row.original.status}
+            label={row.original.status || 'active'}
             color={row.original.status === 'active' ? 'success' : row.original.status === 'pending' ? 'warning' : 'secondary'}
             size='small'
           />
@@ -168,9 +238,35 @@ const ClubList = () => {
     initialState: { pagination: { pageSize: 10 } }
   })
 
-  const handleDeleteConfirm = () => {
-    setDeleteDialogOpen(false)
-    setClubToDelete(null)
+  const handleDeleteConfirm = async () => {
+    if (!clubToDelete?.id) {
+      setDeleteDialogOpen(false)
+      setClubToDelete(null)
+      return
+    }
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/clubs/${clubToDelete.id}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error('Delete failed')
+      await fetchClubs()
+      setDeleteDialogOpen(false)
+      setClubToDelete(null)
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  const handleAddSuccess = () => {
+    setAddDrawerOpen(false)
+    fetchClubs()
+  }
+
+  const handleEditSuccess = () => {
+    setEditDrawerOpen(false)
+    setSelectedClub(null)
+    fetchClubs()
   }
 
   return (
@@ -185,8 +281,14 @@ const ClubList = () => {
           </Typography>
         </div>
 
+        {error && (
+          <Alert severity='error' onClose={() => setError(null)}>
+            {error}
+          </Alert>
+        )}
+
         <div className='grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4'>
-          {ClubCardsData.map((item, i) => (
+          {clubCardsData.map((item, i) => (
             <HorizontalWithSubtitle key={i} {...item} />
           ))}
         </div>
@@ -237,7 +339,11 @@ const ClubList = () => {
             }}
           />
           <Divider />
-          {isMobile ? (
+          {loading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+              <CircularProgress />
+            </Box>
+          ) : isMobile ? (
             <div className='p-4 flex flex-col gap-4'>
               {table.getFilteredRowModel().rows.length === 0 ? (
                 <Typography color='text.secondary' className='text-center py-8'>No clubs found</Typography>
@@ -258,30 +364,44 @@ const ClubList = () => {
                       }}
                     >
                       <CardContent>
-                        <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 1, mb: 2 }}>
-                          <Box>
-                            <Typography variant='subtitle1' fontWeight={600} color='text.primary'>
-                              {club.name}
-                            </Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2, mb: 2 }}>
+                          {club.logo && typeof club.logo === 'string' ? (
+                            <Box
+                              component='img'
+                              src={club.logo}
+                              alt={club.clubName || 'Club logo'}
+                              sx={{ width: 48, height: 48, borderRadius: 1, objectFit: 'contain', border: '1px solid', borderColor: 'divider', bgcolor: 'action.hover', flexShrink: 0 }}
+                            />
+                          ) : (
+                            <Box sx={{ width: 48, height: 48, borderRadius: 1, bgcolor: 'action.hover', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                              <i className='ri-building-line text-2xl text-textSecondary' />
+                            </Box>
+                          )}
+                          <Box sx={{ flex: 1, minWidth: 0 }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, flexWrap: 'wrap' }}>
+                              <Typography variant='subtitle1' fontWeight={600} color='text.primary'>
+                                {club.clubName || club.name}
+                              </Typography>
+                              <Chip label={club.status || 'active'} color={statusColor} size='small' variant='tonal' sx={{ textTransform: 'capitalize' }} />
+                            </Box>
                             <Typography variant='caption' color='text.secondary'>
                               {club.clubId} • {club.leagueName}
                             </Typography>
                           </Box>
-                          <Chip label={club.status} color={statusColor} size='small' variant='tonal' sx={{ textTransform: 'capitalize' }} />
                         </Box>
                         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                             <i className='ri-map-pin-line text-base text-textSecondary' />
-                            <Typography variant='body2' color='text.secondary'>{club.city}</Typography>
+                            <Typography variant='body2' color='text.secondary'>{club.city || '-'}</Typography>
                           </Box>
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                             <i className='ri-user-line text-base text-textSecondary' />
-                            <Typography variant='body2' color='text.secondary'>{club.adminFullName}</Typography>
+                            <Typography variant='body2' color='text.secondary'>{club.adminFullName || '-'}</Typography>
                           </Box>
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                             <i className='ri-mail-line text-base text-textSecondary' />
                             <Typography variant='body2' color='text.secondary' component='a' href={`mailto:${club.adminEmail}`} sx={{ color: 'text.secondary', textDecoration: 'none' }}>
-                              {club.adminEmail}
+                              {club.adminEmail || '-'}
                             </Typography>
                           </Box>
                         </Box>
@@ -335,7 +455,7 @@ const ClubList = () => {
                 <tbody>
                   {table.getFilteredRowModel().rows.length === 0 ? (
                     <tr>
-                      <td colSpan={columns.length} className='text-center'>
+                      <td colSpan={8} className='text-center'>
                         No clubs found
                       </td>
                     </tr>
@@ -352,30 +472,43 @@ const ClubList = () => {
               </table>
             </div>
           )}
-          <TablePagination
-            rowsPerPageOptions={[5, 10, 25]}
-            component='div'
-            count={table.getFilteredRowModel().rows.length}
-            rowsPerPage={table.getState().pagination.pageSize}
-            page={table.getState().pagination.pageIndex}
-            onPageChange={(_, page) => table.setPageIndex(page)}
-            onRowsPerPageChange={e => table.setPageSize(Number(e.target.value))}
-          />
+          {!loading && (
+            <TablePagination
+              rowsPerPageOptions={[5, 10, 25]}
+              component='div'
+              count={table.getFilteredRowModel().rows.length}
+              rowsPerPage={table.getState().pagination.pageSize}
+              page={table.getState().pagination.pageIndex}
+              onPageChange={(_, page) => table.setPageIndex(page)}
+              onRowsPerPageChange={e => table.setPageSize(Number(e.target.value))}
+            />
+          )}
         </Card>
       </div>
 
-      <AddClubDrawer open={addDrawerOpen} onClose={() => setAddDrawerOpen(false)} />
-      <EditClubDrawer open={editDrawerOpen} onClose={() => { setEditDrawerOpen(false); setSelectedClub(null) }} club={selectedClub} />
+      <AddClubDrawer
+        open={addDrawerOpen}
+        onClose={() => setAddDrawerOpen(false)}
+        onSuccess={handleAddSuccess}
+        leagues={leagues}
+      />
+      <EditClubDrawer
+        open={editDrawerOpen}
+        onClose={() => { setEditDrawerOpen(false); setSelectedClub(null) }}
+        club={selectedClub}
+        onSuccess={handleEditSuccess}
+      />
 
       <ConfirmationDialog
         open={deleteDialogOpen}
         onClose={() => { setDeleteDialogOpen(false); setClubToDelete(null) }}
         onConfirm={handleDeleteConfirm}
         title='Delete Club'
-        content={clubToDelete ? `Are you sure you want to delete "${clubToDelete.name}"? This action cannot be undone.` : ''}
+        content={clubToDelete ? `Are you sure you want to delete "${clubToDelete.clubName || clubToDelete.name}"? This action cannot be undone.` : ''}
         confirmText='Delete'
         cancelText='Cancel'
         confirmColor='error'
+        confirmDisabled={deleting}
       />
     </>
   )

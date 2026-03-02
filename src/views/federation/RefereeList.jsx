@@ -1,7 +1,7 @@
 'use client'
 
 // React Imports
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 
 // MUI Imports
 import Box from '@mui/material/Box'
@@ -16,6 +16,7 @@ import Chip from '@mui/material/Chip'
 import IconButton from '@mui/material/IconButton'
 import TablePagination from '@mui/material/TablePagination'
 import useMediaQuery from '@mui/material/useMediaQuery'
+import CircularProgress from '@mui/material/CircularProgress'
 
 // Third-party Imports
 import classnames from 'classnames'
@@ -40,31 +41,48 @@ import { LICENSE_LEVEL_OPTIONS } from '@views/federation/constants'
 // Style Imports
 import tableStyles from '@core/styles/table.module.css'
 
-const REFEREES_DATA = [
-  { id: '1', refereeId: 'REF-001', fullName: 'John Silva', age: 38, licenseLevel: 'fifa-elite', licenseLevelLabel: 'Elite FIFA-listed referees', homeTown: 'Colombo', status: 'active' },
-  { id: '2', refereeId: 'REF-002', fullName: 'Maria Perera', age: 35, licenseLevel: 'national', licenseLevelLabel: 'National (Class 1/Grade 1)', homeTown: 'Kandy', status: 'active' },
-  { id: '3', refereeId: 'REF-003', fullName: 'David Fernando', age: 32, licenseLevel: 'district-regional', licenseLevelLabel: 'District/Regional', homeTown: 'Galle', status: 'pending' },
-  { id: '4', refereeId: 'REF-004', fullName: 'Sarah Gomes', age: 40, licenseLevel: 'national', licenseLevelLabel: 'National (Class 1/Grade 1)', homeTown: 'Jaffna', status: 'inactive' }
-]
-
-const RefereeCardsData = [
-  { title: 'Total Referees', value: '42', avatarIcon: 'ri-user-star-line', avatarColor: 'primary', change: 'positive', changeNumber: '10%', subTitle: 'Registered referees' },
-  { title: 'Active', value: '35', avatarIcon: 'ri-checkbox-circle-line', avatarColor: 'success', change: 'positive', changeNumber: '5%', subTitle: 'Active referees' },
-  { title: 'Pending', value: '5', avatarIcon: 'ri-time-line', avatarColor: 'warning', change: 'negative', changeNumber: '2%', subTitle: 'Pending approval' },
-  { title: 'FIFA Level', value: '8', avatarIcon: 'ri-medal-line', avatarColor: 'info', change: 'positive', changeNumber: '1%', subTitle: 'FIFA certified' }
-]
-
 const columnHelper = createColumnHelper()
 
 const RefereeList = () => {
-  const [data] = useState(REFEREES_DATA)
+  const [data, setData] = useState([])
+  const [loading, setLoading] = useState(true)
   const [globalFilter, setGlobalFilter] = useState('')
   const [addDrawerOpen, setAddDrawerOpen] = useState(false)
   const [editDrawerOpen, setEditDrawerOpen] = useState(false)
   const [selectedReferee, setSelectedReferee] = useState(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [refereeToDelete, setRefereeToDelete] = useState(null)
+  const [deleting, setDeleting] = useState(false)
   const isMobile = useMediaQuery(theme => theme.breakpoints.down('md'))
+
+  const fetchReferees = useCallback(async () => {
+    try {
+      const res = await fetch('/api/referees')
+      const list = await res.json().catch(() => [])
+      setData(Array.isArray(list) ? list : [])
+    } catch {
+      setData([])
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchReferees()
+  }, [fetchReferees])
+
+  const refereeCardsData = useMemo(() => {
+    const total = data.length
+    const active = data.filter(r => r.status === 'active').length
+    const pending = data.filter(r => r.status === 'pending').length
+    const fifaLevel = data.filter(r => r.licenseLevel === 'fifa-elite').length
+    return [
+      { title: 'Total Referees', value: String(total), avatarIcon: 'ri-user-star-line', avatarColor: 'primary', change: 'neutral', changeNumber: '', subTitle: 'Registered referees' },
+      { title: 'Active', value: String(active), avatarIcon: 'ri-checkbox-circle-line', avatarColor: 'success', change: 'neutral', changeNumber: '', subTitle: 'Active referees' },
+      { title: 'Pending', value: String(pending), avatarIcon: 'ri-time-line', avatarColor: 'warning', change: 'neutral', changeNumber: '', subTitle: 'Pending approval' },
+      { title: 'FIFA Level', value: String(fifaLevel), avatarIcon: 'ri-medal-line', avatarColor: 'info', change: 'neutral', changeNumber: '', subTitle: 'FIFA certified' }
+    ]
+  }, [data])
 
   const columns = useMemo(
     () => [
@@ -82,7 +100,7 @@ const RefereeList = () => {
       }),
       columnHelper.accessor('age', {
         header: 'Age',
-        cell: ({ row }) => <Typography variant='body2'>{row.original.age}</Typography>
+        cell: ({ row }) => <Typography variant='body2'>{row.original.age || '-'}</Typography>
       }),
       columnHelper.accessor('licenseLevel', {
         header: 'License Level',
@@ -167,9 +185,27 @@ const RefereeList = () => {
     initialState: { pagination: { pageSize: 10 } }
   })
 
-  const handleDeleteConfirm = () => {
-    setDeleteDialogOpen(false)
-    setRefereeToDelete(null)
+  const handleDeleteConfirm = async () => {
+    if (!refereeToDelete?.id) {
+      setDeleteDialogOpen(false)
+      setRefereeToDelete(null)
+      return
+    }
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/referees/${refereeToDelete.id}`, { method: 'DELETE' })
+      if (res.ok) {
+        setData(prev => prev.filter(r => r.id !== refereeToDelete.id))
+        setDeleteDialogOpen(false)
+        setRefereeToDelete(null)
+      }
+    } catch {
+      // ignore
+    } finally {
+      setDeleting(false)
+      setDeleteDialogOpen(false)
+      setRefereeToDelete(null)
+    }
   }
 
   return (
@@ -185,7 +221,7 @@ const RefereeList = () => {
         </div>
 
         <div className='grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4'>
-          {RefereeCardsData.map((item, i) => (
+          {refereeCardsData.map((item, i) => (
             <HorizontalWithSubtitle key={i} {...item} />
           ))}
         </div>
@@ -236,7 +272,11 @@ const RefereeList = () => {
             }}
           />
           <Divider />
-          {isMobile ? (
+          {loading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+              <CircularProgress />
+            </Box>
+          ) : isMobile ? (
             <div className='p-4 flex flex-col gap-4'>
               {table.getFilteredRowModel().rows.length === 0 ? (
                 <Typography color='text.secondary' className='text-center py-8'>No referees found</Typography>
@@ -271,11 +311,11 @@ const RefereeList = () => {
                         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                             <i className='ri-number-1 text-base text-textSecondary' />
-                            <Typography variant='body2' color='text.secondary'>Age: {referee.age}</Typography>
+                            <Typography variant='body2' color='text.secondary'>Age: {referee.age || '-'}</Typography>
                           </Box>
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                             <i className='ri-map-pin-line text-base text-textSecondary' />
-                            <Typography variant='body2' color='text.secondary'>{referee.homeTown}</Typography>
+                            <Typography variant='body2' color='text.secondary'>{referee.homeTown || '-'}</Typography>
                           </Box>
                         </Box>
                         <Divider sx={{ my: 2 }} />
@@ -326,7 +366,7 @@ const RefereeList = () => {
                   ))}
                 </thead>
                 <tbody>
-                  {table.getFilteredRowModel().rows.length === 0 ? (
+                  {!loading && table.getFilteredRowModel().rows.length === 0 ? (
                     <tr>
                       <td colSpan={columns.length} className='text-center'>
                         No referees found
@@ -357,8 +397,8 @@ const RefereeList = () => {
         </Card>
       </div>
 
-      <AddRefereeDrawer open={addDrawerOpen} onClose={() => setAddDrawerOpen(false)} />
-      <EditRefereeDrawer open={editDrawerOpen} onClose={() => { setEditDrawerOpen(false); setSelectedReferee(null) }} referee={selectedReferee} />
+      <AddRefereeDrawer open={addDrawerOpen} onClose={() => setAddDrawerOpen(false)} onSuccess={fetchReferees} />
+      <EditRefereeDrawer open={editDrawerOpen} onClose={() => { setEditDrawerOpen(false); setSelectedReferee(null) }} referee={selectedReferee} onSuccess={fetchReferees} />
 
       <ConfirmationDialog
         open={deleteDialogOpen}
@@ -369,6 +409,7 @@ const RefereeList = () => {
         confirmText='Delete'
         cancelText='Cancel'
         confirmColor='error'
+        confirmDisabled={deleting}
       />
     </>
   )

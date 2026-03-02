@@ -1,8 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
+import CircularProgress from '@mui/material/CircularProgress'
 import Dialog from '@mui/material/Dialog'
 import DialogContent from '@mui/material/DialogContent'
 import DialogTitle from '@mui/material/DialogTitle'
@@ -16,9 +17,9 @@ import MenuItem from '@mui/material/MenuItem'
 import Select from '@mui/material/Select'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
-import { SCHEDULED_MATCHES, REFEREES_OPTIONS_SIMPLE, GOAL_TYPES } from '@views/federation/constants'
+import { GOAL_TYPES } from '@views/federation/constants'
 
-export default function AddResultDialog ({ open, onClose, onSave }) {
+export default function AddResultDialog ({ open, onClose, onSave, scheduledMatches = [], clubs = [], leagues = [], referees = [] }) {
   const [formErrors, setFormErrors] = useState({})
   const [formData, setFormData] = useState({
     matchId: '',
@@ -33,8 +34,45 @@ export default function AddResultDialog ({ open, onClose, onSave }) {
     cards: []
   })
 
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState(null)
+  const clubMap = useMemo(() => {
+    const m = {}
+    clubs.forEach(c => { m[c.id] = c.clubName || c.name || '-' })
+    return m
+  }, [clubs])
+  const leagueMap = useMemo(() => {
+    const m = {}
+    leagues.forEach(l => { m[l.id] = l.name || '-' })
+    return m
+  }, [leagues])
+  const matchOptions = useMemo(() => scheduledMatches.map(m => ({
+    ...m,
+    homeTeamName: clubMap[m.homeClubId] || '-',
+    awayTeamName: clubMap[m.awayClubId] || '-',
+    leagueName: leagueMap[m.leagueId] || '-'
+  })), [scheduledMatches, clubMap, leagueMap])
   const defaultGoal = () => ({ minute: '', scorer: '', team: 'home', type: 'open_play' })
   const defaultCard = () => ({ minute: '', player: '', team: 'home', type: 'yellow' })
+  const resetForm = () => {
+    setFormData({
+      matchId: '',
+      venue: '',
+      date: '',
+      referee: '',
+      homeScore: '',
+      awayScore: '',
+      halfTimeScore: '',
+      attendance: '',
+      goals: [],
+      cards: []
+    })
+    setFormErrors({})
+    setError(null)
+  }
+  useEffect(() => {
+    if (open) resetForm()
+  }, [open])
 
   const validateForm = () => {
     const errors = {}
@@ -52,54 +90,69 @@ export default function AddResultDialog ({ open, onClose, onSave }) {
     return Object.keys(errors).length === 0
   }
 
-  const handleSubmit = e => {
+  const handleSubmit = async e => {
     e.preventDefault()
     if (!validateForm()) return
-    const match = SCHEDULED_MATCHES.find(m => m.id === formData.matchId)
-    if (!match) return
-    const refereeName = REFEREES_OPTIONS_SIMPLE.find(r => r.id === formData.referee)?.name || ''
+    const match = matchOptions.find(m => m.id === formData.matchId)
+    if (!match) {
+      setFormErrors(prev => ({ ...prev, matchId: 'Match not found' }))
+      return
+    }
     const goals = formData.goals
       .filter(g => g.minute !== '' && g.scorer?.trim())
       .map(g => ({ minute: Number(g.minute), scorer: g.scorer.trim(), team: g.team, type: g.type }))
     const cards = formData.cards
       .filter(c => c.minute !== '' && c.player?.trim())
       .map(c => ({ minute: Number(c.minute), player: c.player.trim(), team: c.team, type: c.type }))
-    onSave({
-      homeTeam: match.homeTeamName,
-      awayTeam: match.awayTeamName,
-      homeScore: Number(formData.homeScore),
-      awayScore: Number(formData.awayScore),
-      date: formData.date,
-      venue: formData.venue.trim(),
-      leagueName: match.leagueName,
-      referee: refereeName,
-      attendance: formData.attendance === '' ? undefined : Number(formData.attendance),
-      halfTimeScore: formData.halfTimeScore.trim(),
-      goals,
-      cards
-    })
-    setFormData({
-      matchId: '',
-      venue: '',
-      date: '',
-      referee: '',
-      homeScore: '',
-      awayScore: '',
-      halfTimeScore: '',
-      attendance: '',
-      goals: [],
-      cards: []
-    })
-    setFormErrors({})
+    setSaving(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/matches/${formData.matchId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: 'played',
+          homeScore: Number(formData.homeScore),
+          awayScore: Number(formData.awayScore),
+          halfTimeScore: formData.halfTimeScore.trim(),
+          attendance: formData.attendance === '' ? undefined : Number(formData.attendance),
+          refereeId: formData.referee,
+          goals,
+          cards
+        })
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.message || 'Failed to save result')
+      }
+      setFormData({
+        matchId: '',
+        venue: '',
+        date: '',
+        referee: '',
+        homeScore: '',
+        awayScore: '',
+        halfTimeScore: '',
+        attendance: '',
+        goals: [],
+        cards: []
+      })
+      setFormErrors({})
+      onSave()
+    } catch (err) {
+      setError(err.message || 'Failed to save result')
+    } finally {
+      setSaving(false)
+    }
   }
 
   const handleMatchChange = matchId => {
-    const match = SCHEDULED_MATCHES.find(m => m.id === matchId)
+    const match = matchOptions.find(m => m.id === matchId)
     setFormData(prev => ({
       ...prev,
       matchId,
-      venue: match ? match.venue : prev.venue,
-      date: match ? match.date : prev.date
+      venue: match ? (match.venue || '') : prev.venue,
+      date: match ? (match.matchDate || match.date || '') : prev.date
     }))
     if (formErrors.matchId) setFormErrors(prev => ({ ...prev, matchId: '' }))
   }
@@ -150,9 +203,9 @@ export default function AddResultDialog ({ open, onClose, onSave }) {
                   onChange={e => handleMatchChange(e.target.value)}
                 >
                   <MenuItem value=''><em>Select match</em></MenuItem>
-                  {SCHEDULED_MATCHES.map(m => (
+                  {matchOptions.map(m => (
                     <MenuItem key={m.id} value={m.id}>
-                      {m.homeTeamName} vs {m.awayTeamName} ({m.leagueName} – {m.date})
+                      {m.homeTeamName} vs {m.awayTeamName} ({m.leagueName} – {m.matchDate || m.date})
                     </MenuItem>
                   ))}
                 </Select>
@@ -175,8 +228,8 @@ export default function AddResultDialog ({ open, onClose, onSave }) {
                 <InputLabel id='add-result-referee-label'>Referee</InputLabel>
                 <Select value={formData.referee} label='Referee' onChange={e => update('referee', e.target.value)}>
                   <MenuItem value=''><em>Select referee</em></MenuItem>
-                  {REFEREES_OPTIONS_SIMPLE.map(r => (
-                    <MenuItem key={r.id} value={r.id}>{r.name}</MenuItem>
+                  {referees.map(r => (
+                    <MenuItem key={r.id} value={r.id}>{r.fullName}</MenuItem>
                   ))}
                 </Select>
                 {formErrors.referee && <FormHelperText>{formErrors.referee}</FormHelperText>}
@@ -271,9 +324,14 @@ export default function AddResultDialog ({ open, onClose, onSave }) {
             </Grid>
           ))}
 
+          {error && (
+            <Typography color='error' variant='body2' sx={{ mt: 2 }}>{error}</Typography>
+          )}
           <div className='flex gap-2 mt-2'>
-            <Button type='submit' variant='contained' size='small'>Save Result</Button>
-            <Button type='button' variant='outlined' color='secondary' size='small' onClick={onClose}>Cancel</Button>
+            <Button type='submit' variant='contained' size='small' disabled={saving} startIcon={saving ? <CircularProgress size={16} color='inherit' /> : null}>
+              {saving ? 'Saving...' : 'Save Result'}
+            </Button>
+            <Button type='button' variant='outlined' color='secondary' size='small' onClick={onClose} disabled={saving}>Cancel</Button>
           </div>
         </form>
       </DialogContent>

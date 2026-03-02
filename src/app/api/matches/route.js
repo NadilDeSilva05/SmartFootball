@@ -12,15 +12,29 @@ export async function GET (request) {
     const leagueId = searchParams.get('leagueId')
     const status = searchParams.get('status')
     const db = getFirestore()
-    let q = db.collection(COLLECTIONS.matches).orderBy('matchDate', 'desc').orderBy('matchTime', 'asc')
-    if (leagueId) q = q.where('leagueId', '==', leagueId)
-    if (status) q = q.where('status', '==', status)
-    const snap = await q.get()
-    const list = snap.docs.map(d => ({ id: d.id, ...d.data() }))
-    return Response.json(list)
+    const col = db.collection(COLLECTIONS.matches)
+    // Avoid Firestore composite index: fetch all when filtering, or use single orderBy when not
+    const snap = (!leagueId && !status)
+      ? await col.orderBy('matchDate', 'desc').get()
+      : await col.get()
+    let list = (snap?.docs ?? []).map(d => {
+      const data = d.data()
+      return { id: d.id, ...(data && typeof data === 'object' ? data : {}) }
+    })
+    if (leagueId) list = list.filter(m => (m.leagueId || null) === leagueId)
+    if (status) list = list.filter(m => (m.status || 'scheduled') === status)
+    // Sort in memory: matchDate desc, then matchTime asc (avoids composite index)
+    list.sort((a, b) => {
+      const da = (a.matchDate || '').toString()
+      const dbVal = (b.matchDate || '').toString()
+      if (da !== dbVal) return dbVal.localeCompare(da) // desc
+      return ((a.matchTime || '').toString()).localeCompare((b.matchTime || '').toString())
+    })
+    return Response.json(Array.isArray(list) ? list : [])
   } catch (e) {
-    console.error(e)
-    return serverError(e.message)
+    const msg = e?.message ?? String(e)
+    console.error('Matches GET error:', msg)
+    return serverError(msg || 'Internal server error')
   }
 }
 
@@ -47,7 +61,8 @@ export async function POST (request) {
     })
     return created({ id: ref.id })
   } catch (e) {
-    console.error(e)
-    return serverError(e.message)
+    const msg = e?.message ?? String(e)
+    console.error('Matches POST error:', msg)
+    return serverError(msg || 'Internal server error')
   }
 }

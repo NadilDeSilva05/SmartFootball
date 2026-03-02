@@ -30,7 +30,7 @@ export async function PUT (request, { params }) {
     const ref = db.collection(COLLECTIONS.referees).doc(id)
     const doc = await ref.get()
     if (!doc.exists) return notFound('Referee not found')
-    const allowed = ['fullName', 'licenseLevel', 'nicOrPassport', 'email', 'status']
+    const allowed = ['refereeId', 'fullName', 'licenseLevel', 'nicOrPassport', 'email', 'age', 'homeTown', 'status']
     const updates = { updatedAt: new Date().toISOString() }
     allowed.forEach(k => { if (body[k] !== undefined) updates[k] = body[k] })
     await ref.update(updates)

@@ -11,34 +11,72 @@ import MenuItem from '@mui/material/MenuItem'
 import Select from '@mui/material/Select'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
+import CircularProgress from '@mui/material/CircularProgress'
+import Alert from '@mui/material/Alert'
 import { LICENSE_LEVEL_OPTIONS } from '@views/federation/constants'
 
-export default function EditRefereeDrawer ({ open, onClose, referee }) {
+export default function EditRefereeDrawer ({ open, onClose, referee, onSuccess }) {
   const [formData, setFormData] = useState({
     refereeId: '',
     fullName: '',
+    email: '',
+    nicOrPassport: '',
     age: '',
     licenseLevel: 'district-regional',
     homeTown: '',
     status: 'active'
   })
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState(null)
 
   useEffect(() => {
     if (referee) {
       setFormData({
         refereeId: referee.refereeId || '',
         fullName: referee.fullName || '',
+        email: referee.email || '',
+        nicOrPassport: referee.nicOrPassport || '',
         age: referee.age?.toString() || '',
         licenseLevel: referee.licenseLevel || 'district-regional',
         homeTown: referee.homeTown || '',
         status: referee.status || 'active'
       })
+      setSubmitError(null)
     }
   }, [referee])
 
-  const handleSubmit = e => {
+  const handleSubmit = async e => {
     e.preventDefault()
-    onClose()
+    if (!referee?.id) return
+    setSubmitting(true)
+    setSubmitError(null)
+    try {
+      const res = await fetch(`/api/referees/${referee.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          refereeId: formData.refereeId.trim(),
+          fullName: formData.fullName.trim(),
+          licenseLevel: formData.licenseLevel || '',
+          nicOrPassport: formData.nicOrPassport?.trim() || '',
+          email: formData.email?.trim() || '',
+          age: formData.age?.trim() || '',
+          homeTown: formData.homeTown?.trim() || '',
+          status: formData.status
+        })
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setSubmitError(data?.error || 'Failed to update referee')
+        return
+      }
+      onClose()
+      onSuccess?.()
+    } catch (err) {
+      setSubmitError(err?.message || 'Failed to update referee')
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -66,6 +104,21 @@ export default function EditRefereeDrawer ({ open, onClose, referee }) {
               label='Full Name'
               value={formData.fullName}
               onChange={e => setFormData({ ...formData, fullName: e.target.value })}
+            />
+            <TextField
+              fullWidth
+              size='small'
+              label='Email'
+              type='email'
+              value={formData.email}
+              onChange={e => setFormData({ ...formData, email: e.target.value })}
+            />
+            <TextField
+              fullWidth
+              size='small'
+              label='NIC / Passport'
+              value={formData.nicOrPassport}
+              onChange={e => setFormData({ ...formData, nicOrPassport: e.target.value })}
             />
             <TextField
               fullWidth
@@ -109,9 +162,12 @@ export default function EditRefereeDrawer ({ open, onClose, referee }) {
                 <MenuItem value='inactive'>Inactive</MenuItem>
               </Select>
             </FormControl>
+            {submitError && <Alert severity='error' onClose={() => setSubmitError(null)}>{submitError}</Alert>}
             <div className='flex gap-2 mt-2'>
-              <Button type='submit' variant='contained' size='small'>Save</Button>
-              <Button type='button' variant='outlined' color='secondary' size='small' onClick={onClose}>Cancel</Button>
+              <Button type='submit' variant='contained' size='small' disabled={submitting} startIcon={submitting ? <CircularProgress size={18} /> : null}>
+                {submitting ? 'Saving...' : 'Save'}
+              </Button>
+              <Button type='button' variant='outlined' color='secondary' size='small' onClick={onClose} disabled={submitting}>Cancel</Button>
             </div>
           </form>
         )}

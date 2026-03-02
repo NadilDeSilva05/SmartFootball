@@ -19,8 +19,13 @@ import Typography from '@mui/material/Typography'
 import Divider from '@mui/material/Divider'
 import MenuItem from '@mui/material/MenuItem'
 import Button from '@mui/material/Button'
+
 // Hook Imports
 import { useSettings } from '@core/hooks/useSettings'
+import { useSelector, useDispatch } from 'react-redux'
+import { signOut } from 'firebase/auth'
+import { logout } from '@/redux/slices/authenticationSlice'
+import { getFirebaseAuth } from '@/lib/firebase-client'
 
 // Styled component for badge content
 const BadgeContentSpan = styled('span')({
@@ -33,23 +38,19 @@ const BadgeContentSpan = styled('span')({
 })
 
 const UserDropdown = () => {
-  // States
   const [open, setOpen] = useState(false)
-
-  // Refs
   const anchorRef = useRef(null)
-
-  // Hooks
   const router = useRouter()
+  const dispatch = useDispatch()
   const { settings } = useSettings()
   const { lang: locale } = useParams()
 
-  // UI-only: static user for display
+  const user = useSelector(state => state?.authenticationReducer?.loginData?.user)
   const userData = {
-    name: 'User',
-    email: 'user@example.com',
+    name: user?.fullName || user?.email?.split('@')[0] || 'User',
+    email: user?.email || 'user@example.com',
     image: '/images/avatars/1.png',
-    role: 'User'
+    role: user?.role || user?.accountRole || 'User'
   }
 
   const handleDropdownOpen = () => {
@@ -68,8 +69,17 @@ const UserDropdown = () => {
     setOpen(false)
   }
 
-  const handleUserLogout = () => {
+  const handleUserLogout = async () => {
     setOpen(false)
+    const auth = getFirebaseAuth()
+    if (auth) {
+      try {
+        await signOut(auth)
+      } catch (e) {
+        console.error(e)
+      }
+    }
+    dispatch(logout())
     router.push('/login')
   }
 

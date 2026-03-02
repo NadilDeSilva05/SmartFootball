@@ -17,9 +17,9 @@ import Button from '@mui/material/Button'
 import FormControlLabel from '@mui/material/FormControlLabel'
 import CircularProgress from '@mui/material/CircularProgress'
 import Alert from '@mui/material/Alert'
+
 // Redux Imports
 import { useDispatch, useSelector } from 'react-redux'
-import { requestSignUp } from '@/redux/slices/authenticationSlice'
 
 // Component Imports
 import Illustrations from '@components/Illustrations'
@@ -30,10 +30,12 @@ import themeConfig from '@configs/themeConfig'
 // Hook Imports
 import { useImageVariant } from '@core/hooks/useImageVariant'
 
+import { requestSignUpFederationAdmin } from '@/redux/slices/authenticationSlice'
+
 const Register = ({ mode }) => {
   const router = useRouter()
   const dispatch = useDispatch()
-  const isSignUpLoading = useSelector(state => state.authenticationReducer?.isSignUpLoading)
+  const isSignUpLoading = useSelector(state => state?.authenticationReducer?.isSignUpLoading)
 
   const [isPasswordShown, setIsPasswordShown] = useState(false)
   const [formData, setFormData] = useState({
@@ -41,6 +43,7 @@ const Register = ({ mode }) => {
     lastName: '',
     email: '',
     password: '',
+    securityCode: '',
     agreeToTerms: false
   })
   const [errors, setErrors] = useState({})
@@ -48,45 +51,25 @@ const Register = ({ mode }) => {
   const darkImg = '/images/pages/auth-v2-mask-dark.png'
   const lightImg = '/images/pages/auth-v2-mask-light.png'
   const footballIllustration = '/images/illustrations/small-child-football-player.svg'
-
   const authBackground = useImageVariant(mode, lightImg, darkImg)
 
   const handleClickShowPassword = () => setIsPasswordShown(show => !show)
 
   const handleInputChange = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }))
-    if (errors[field]) {
-      setErrors(prev => ({ ...prev, [field]: '' }))
-    }
+    if (errors[field]) setErrors(prev => ({ ...prev, [field]: '' }))
   }
 
   const validateForm = () => {
     const newErrors = {}
-
-    if (!formData.firstName.trim()) {
-      newErrors.firstName = 'First name is required'
-    }
-
-    if (!formData.lastName.trim()) {
-      newErrors.lastName = 'Last name is required'
-    }
-
-    if (!formData.email.trim()) {
-      newErrors.email = 'Email is required'
-    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
-      newErrors.email = 'Please enter a valid email'
-    }
-
-    if (!formData.password) {
-      newErrors.password = 'Password is required'
-    } else if (formData.password.length < 6) {
-      newErrors.password = 'Password must be at least 6 characters'
-    }
-
-    if (!formData.agreeToTerms) {
-      newErrors.agreeToTerms = 'You must agree to the terms'
-    }
-
+    if (!formData.firstName?.trim()) newErrors.firstName = 'First name is required'
+    if (!formData.lastName?.trim()) newErrors.lastName = 'Last name is required'
+    if (!formData.email?.trim()) newErrors.email = 'Email is required'
+    else if (!/\S+@\S+\.\S+/.test(formData.email)) newErrors.email = 'Please enter a valid email'
+    if (!formData.password) newErrors.password = 'Password is required'
+    else if (formData.password.length < 6) newErrors.password = 'Password must be at least 6 characters'
+    if (!formData.securityCode?.trim()) newErrors.securityCode = 'Security code is required'
+    if (!formData.agreeToTerms) newErrors.agreeToTerms = 'You must agree to the terms'
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
@@ -98,36 +81,27 @@ const Register = ({ mode }) => {
   const handleSignUpFailed = error => {
     setErrors(prev => ({
       ...prev,
-      submit:
-        error?.response?.data?.message ||
-        error?.response?.data?.name ||
-        error?.message ||
-        'Registration failed. Please try again.'
+      submit: error?.response?.data?.error || error?.message || 'Registration failed. Please try again.'
     }))
   }
 
-  const handleSubmit = e => {
+  const handleSubmit = async e => {
     e.preventDefault()
+    if (!validateForm()) return
 
-    if (!validateForm()) {
-      return
-    }
+    setErrors(prev => ({ ...prev, submit: '' }))
 
-    const payload = {
-      firstName: formData.firstName,
-      lastName: formData.lastName,
-      email: formData.email,
-      emailOrPhoneNumber: formData.email,
-      password: formData.password,
-      role: 'federation_admin',
-      rememberMe: false
-    }
-
-    dispatch(
-      requestSignUp({
-        requestBody: payload,
-        handleSignUpSuccessCallback: handleSignUpSuccess,
-        handleSignUpFailedCallback: handleSignUpFailed
+    await dispatch(
+      requestSignUpFederationAdmin({
+        requestBody: {
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          email: formData.email,
+          password: formData.password,
+          securityCode: formData.securityCode
+        },
+        handleSuccessCallback: handleSignUpSuccess,
+        handleFailedCallback: handleSignUpFailed
       })
     )
   }
@@ -156,12 +130,7 @@ const Register = ({ mode }) => {
       <div className='flex justify-center items-center bs-full bg-backgroundPaper !min-is-full p-6 md:!min-is-[unset] md:p-12 md:is-[480px] border-is border-solid border-default'>
         <div className='absolute block-start-5 sm:block-start-[33px] inline-start-6 sm:inline-start-[38px]'>
           <div className='flex justify-center items-center gap-3 mbe-6'>
-            <img
-              src='/images/logos/smartfootball.png'
-              alt='Smart Football'
-              height={28}
-              className='w-auto object-contain'
-            />
+            <img src='/images/logos/smartfootball.png' alt='Smart Football' height={28} className='w-auto object-contain' />
             <Typography variant='h4' className='font-semibold tracking-[0.15px]'>
               {themeConfig.templateName}
             </Typography>
@@ -172,7 +141,7 @@ const Register = ({ mode }) => {
           <div>
             <Typography variant='h4'>Federation Admin Registration</Typography>
             <Typography className='mbe-1'>
-              Create your federation admin account to manage football analytics and federation operations.
+              Create your federation admin account. A security code is required.
             </Typography>
           </div>
 
@@ -221,13 +190,20 @@ const Register = ({ mode }) => {
                 )
               }}
             />
+            <TextField
+              fullWidth
+              label='Security Code'
+              type='password'
+              value={formData.securityCode}
+              onChange={e => handleInputChange('securityCode', e.target.value)}
+              error={!!errors.securityCode}
+              helperText={errors.securityCode || 'Contact your federation for the registration security code.'}
+              placeholder='Enter the security code'
+            />
 
             <FormControlLabel
               control={
-                <Checkbox
-                  checked={formData.agreeToTerms}
-                  onChange={e => handleInputChange('agreeToTerms', e.target.checked)}
-                />
+                <Checkbox checked={formData.agreeToTerms} onChange={e => handleInputChange('agreeToTerms', e.target.checked)} />
               }
               label={
                 <>
@@ -239,15 +215,11 @@ const Register = ({ mode }) => {
               }
             />
             {errors.agreeToTerms && (
-              <Typography variant='caption' color='error'>
-                {errors.agreeToTerms}
-              </Typography>
+              <Typography variant='caption' color='error'>{errors.agreeToTerms}</Typography>
             )}
 
             {errors.submit && (
-              <Alert severity='error' sx={{ mt: 1 }}>
-                {errors.submit}
-              </Alert>
+              <Alert severity='error' sx={{ mt: 1 }}>{errors.submit}</Alert>
             )}
 
             <Button

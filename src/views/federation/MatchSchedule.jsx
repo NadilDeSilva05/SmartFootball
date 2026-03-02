@@ -1,7 +1,7 @@
 'use client'
 
 // React Imports
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 
 // MUI Imports
 import Box from '@mui/material/Box'
@@ -15,6 +15,7 @@ import Typography from '@mui/material/Typography'
 import IconButton from '@mui/material/IconButton'
 import TablePagination from '@mui/material/TablePagination'
 import useMediaQuery from '@mui/material/useMediaQuery'
+import CircularProgress from '@mui/material/CircularProgress'
 
 // Third-party Imports
 import classnames from 'classnames'
@@ -34,29 +35,88 @@ import HorizontalWithSubtitle from '@components/card-statistics/HorizontalWithSu
 import ConfirmationDialog from '@components/dialogs/confirmation-dialog'
 import AddMatchDrawer from '@views/federation/components/match/AddMatchDrawer'
 import EditMatchDrawer from '@views/federation/components/match/EditMatchDrawer'
-import { LEAGUES_OPTIONS, TEAMS_OPTIONS } from '@views/federation/constants'
 
 // Style Imports
 import tableStyles from '@core/styles/table.module.css'
 
-const MATCHES_DATA = [
-  { id: '1', leagueId: '1', leagueName: 'Premier League', homeTeamId: 'city-fc', homeTeamName: 'City FC', awayTeamId: 'united-sc', awayTeamName: 'United SC', venue: 'National Stadium', date: '2025-02-15', time: '15:00' },
-  { id: '2', leagueId: '1', leagueName: 'Premier League', homeTeamId: 'rovers-fc', homeTeamName: 'Rovers FC', awayTeamId: 'athletic-club', awayTeamName: 'Athletic Club', venue: 'City Arena', date: '2025-02-16', time: '17:00' },
-  { id: '3', leagueId: '2', leagueName: 'Division One', homeTeamId: 'stars-fc', homeTeamName: 'Stars FC', awayTeamId: 'dynamo-fc', awayTeamName: 'Dynamo FC', venue: 'Regional Ground', date: '2025-02-18', time: '14:00' }
-]
-
-const MatchCardsData = [
-  { title: 'Scheduled', value: '24', avatarIcon: 'ri-calendar-check-line', avatarColor: 'primary', change: 'positive', changeNumber: '5', subTitle: 'Upcoming matches' },
-  { title: 'Today', value: '3', avatarIcon: 'ri-calendar-today-line', avatarColor: 'success', change: 'neutral', changeNumber: '0', subTitle: 'Matches today' },
-  { title: 'This Week', value: '12', avatarIcon: 'ri-calendar-week-line', avatarColor: 'info', change: 'positive', changeNumber: '2', subTitle: 'Next 7 days' },
-  { title: 'Completed', value: '48', avatarIcon: 'ri-check-double-line', avatarColor: 'secondary', change: 'positive', changeNumber: '8%', subTitle: 'Season total' }
-]
-
 const columnHelper = createColumnHelper()
 
 const MatchSchedule = () => {
-  const [data] = useState(MATCHES_DATA)
+  const [rawMatches, setRawMatches] = useState([])
+  const [clubs, setClubs] = useState([])
+  const [leagues, setLeagues] = useState([])
+  const [loading, setLoading] = useState(true)
   const [globalFilter, setGlobalFilter] = useState('')
+
+  const fetchMatches = useCallback(async () => {
+    try {
+      const res = await fetch('/api/matches', { cache: 'no-store' })
+      const list = await res.json().catch(() => [])
+      setRawMatches(Array.isArray(list) ? list : [])
+    } catch {
+      setRawMatches([])
+    }
+  }, [])
+
+  const fetchClubs = useCallback(async () => {
+    try {
+      const res = await fetch('/api/clubs')
+      const list = await res.json().catch(() => [])
+      setClubs(Array.isArray(list) ? list : [])
+    } catch {
+      setClubs([])
+    }
+  }, [])
+
+  const fetchLeagues = useCallback(async () => {
+    try {
+      const res = await fetch('/api/leagues')
+      const list = await res.json().catch(() => [])
+      setLeagues(Array.isArray(list) ? list : [])
+    } catch {
+      setLeagues([])
+    }
+  }, [])
+
+  useEffect(() => {
+    setLoading(true)
+    Promise.all([fetchMatches(), fetchClubs(), fetchLeagues()]).finally(() => setLoading(false))
+  }, [fetchMatches, fetchClubs, fetchLeagues])
+
+  const clubMap = useMemo(() => {
+    const m = {}
+    clubs.forEach(c => { m[c.id] = c.clubName || c.name || '-' })
+    return m
+  }, [clubs])
+
+  const leagueMap = useMemo(() => {
+    const m = {}
+    leagues.forEach(l => { m[l.id] = l.name || '-' })
+    return m
+  }, [leagues])
+
+  const data = useMemo(() => rawMatches.map(m => ({
+    ...m,
+    homeTeamName: clubMap[m.homeClubId] || '-',
+    awayTeamName: clubMap[m.awayClubId] || '-',
+    leagueName: leagueMap[m.leagueId] || '-',
+    date: m.matchDate || m.date || '',
+    time: m.matchTime || m.time || ''
+  })), [rawMatches, clubMap, leagueMap])
+
+  const matchCardsData = useMemo(() => {
+    const scheduled = rawMatches.filter(m => m.status === 'scheduled').length
+    const played = rawMatches.filter(m => m.status === 'played').length
+    const today = new Date().toISOString().slice(0, 10)
+    const todayCount = rawMatches.filter(m => (m.matchDate || m.date) === today).length
+    const total = rawMatches.length
+    return [
+      { title: 'Scheduled', value: String(scheduled), avatarIcon: 'ri-calendar-check-line', avatarColor: 'primary', change: 'neutral', changeNumber: '', subTitle: 'Upcoming matches' },
+      { title: 'Today', value: String(todayCount), avatarIcon: 'ri-calendar-today-line', avatarColor: 'success', change: 'neutral', changeNumber: '', subTitle: 'Matches today' },
+      { title: 'Total', value: String(total), avatarIcon: 'ri-calendar-week-line', avatarColor: 'info', change: 'neutral', changeNumber: '', subTitle: 'All matches' },
+      { title: 'Completed', value: String(played), avatarIcon: 'ri-check-double-line', avatarColor: 'secondary', change: 'neutral', changeNumber: '', subTitle: 'Played' }
+    ]
+  }, [rawMatches])
   const [addDrawerOpen, setAddDrawerOpen] = useState(false)
   const [editDrawerOpen, setEditDrawerOpen] = useState(false)
   const [selectedMatch, setSelectedMatch] = useState(null)
@@ -158,7 +218,22 @@ const MatchSchedule = () => {
     initialState: { pagination: { pageSize: 10 } }
   })
 
-  const handleDeleteConfirm = () => {
+  const handleDeleteConfirm = async () => {
+    if (!matchToDelete?.id) {
+      setDeleteDialogOpen(false)
+      setMatchToDelete(null)
+      return
+    }
+    try {
+      const res = await fetch(`/api/matches/${matchToDelete.id}`, { method: 'DELETE' })
+      if (res.ok) {
+        setRawMatches(prev => prev.filter(m => m.id !== matchToDelete.id))
+        setDeleteDialogOpen(false)
+        setMatchToDelete(null)
+      }
+    } catch {
+      // ignore
+    }
     setDeleteDialogOpen(false)
     setMatchToDelete(null)
   }
@@ -176,7 +251,7 @@ const MatchSchedule = () => {
         </div>
 
         <div className='grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4'>
-          {MatchCardsData.map((item, i) => (
+          {matchCardsData.map((item, i) => (
             <HorizontalWithSubtitle key={i} {...item} />
           ))}
         </div>
@@ -227,7 +302,11 @@ const MatchSchedule = () => {
             }}
           />
           <Divider />
-          {isMobile ? (
+          {loading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+              <CircularProgress />
+            </Box>
+          ) : isMobile ? (
             <div className='p-4 flex flex-col gap-4'>
               {table.getFilteredRowModel().rows.length === 0 ? (
                 <Typography color='text.secondary' className='text-center py-8'>No matches found</Typography>
@@ -312,7 +391,7 @@ const MatchSchedule = () => {
                   ))}
                 </thead>
                 <tbody>
-                  {table.getFilteredRowModel().rows.length === 0 ? (
+                  {!loading && table.getFilteredRowModel().rows.length === 0 ? (
                     <tr>
                       <td colSpan={columns.length} className='text-center'>
                         No matches found
@@ -343,8 +422,8 @@ const MatchSchedule = () => {
         </Card>
       </div>
 
-      <AddMatchDrawer open={addDrawerOpen} onClose={() => setAddDrawerOpen(false)} />
-      <EditMatchDrawer open={editDrawerOpen} onClose={() => { setEditDrawerOpen(false); setSelectedMatch(null) }} match={selectedMatch} />
+      <AddMatchDrawer open={addDrawerOpen} onClose={() => setAddDrawerOpen(false)} onSuccess={fetchMatches} leagues={leagues} clubs={clubs} />
+      <EditMatchDrawer open={editDrawerOpen} onClose={() => { setEditDrawerOpen(false); setSelectedMatch(null) }} match={selectedMatch} onSuccess={fetchMatches} leagues={leagues} clubs={clubs} />
 
       <ConfirmationDialog
         open={deleteDialogOpen}

@@ -2,6 +2,7 @@
  * Firestore collection names – single source of truth for API and client
  */
 export const COLLECTIONS = {
+  users: 'users',
   clubs: 'clubs',
   referees: 'referees',
   leagues: 'leagues',

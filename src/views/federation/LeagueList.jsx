@@ -1,7 +1,7 @@
 'use client'
 
 // React Imports
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 
 // MUI Imports
 import Card from '@mui/material/Card'
@@ -37,24 +37,11 @@ import EditLeagueDrawer from '@views/federation/components/league/EditLeagueDraw
 // Style Imports
 import tableStyles from '@core/styles/table.module.css'
 
-const LEAGUES_DATA = [
-  { id: '1', name: 'Premier League', region: 'National', season: '2024-25', status: 'active' },
-  { id: '2', name: 'Division One', region: 'National', season: '2024-25', status: 'active' },
-  { id: '3', name: 'Regional Cup', region: 'Regional', season: '2024-25', status: 'upcoming' },
-  { id: '4', name: 'Super League', region: 'National', season: '2023-24', status: 'completed' }
-]
-
-const LeagueCardsData = [
-  { title: 'Total Leagues', value: '12', avatarIcon: 'ri-trophy-line', avatarColor: 'primary', change: 'positive', changeNumber: '5%', subTitle: 'All leagues' },
-  { title: 'Active', value: '6', avatarIcon: 'ri-checkbox-circle-line', avatarColor: 'success', change: 'positive', changeNumber: '2%', subTitle: 'Current season' },
-  { title: 'Upcoming', value: '3', avatarIcon: 'ri-calendar-line', avatarColor: 'info', change: 'neutral', changeNumber: '0%', subTitle: 'Scheduled' },
-  { title: 'Completed', value: '3', avatarIcon: 'ri-archive-line', avatarColor: 'secondary', change: 'negative', changeNumber: '1%', subTitle: 'Past seasons' }
-]
-
 const columnHelper = createColumnHelper()
 
 const LeagueList = () => {
-  const [data] = useState(LEAGUES_DATA)
+  const [data, setData] = useState([])
+  const [loading, setLoading] = useState(true)
   const [globalFilter, setGlobalFilter] = useState('')
   const [addDrawerOpen, setAddDrawerOpen] = useState(false)
   const [editDrawerOpen, setEditDrawerOpen] = useState(false)
@@ -63,6 +50,35 @@ const LeagueList = () => {
   const [leagueToDelete, setLeagueToDelete] = useState(null)
   const [standingsModalOpen, setStandingsModalOpen] = useState(false)
   const [leagueForStandings, setLeagueForStandings] = useState(null)
+
+  const fetchLeagues = useCallback(async () => {
+    try {
+      const res = await fetch('/api/leagues')
+      const list = await res.json().catch(() => [])
+      setData(Array.isArray(list) ? list : [])
+    } catch {
+      setData([])
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchLeagues()
+  }, [fetchLeagues])
+
+  const leagueCardsData = useMemo(() => {
+    const total = data.length
+    const active = data.filter(l => l.status === 'active').length
+    const upcoming = data.filter(l => l.status === 'upcoming').length
+    const completed = data.filter(l => l.status === 'completed').length
+    return [
+      { title: 'Total Leagues', value: String(total), avatarIcon: 'ri-trophy-line', avatarColor: 'primary', change: 'neutral', changeNumber: '', subTitle: 'All leagues' },
+      { title: 'Active', value: String(active), avatarIcon: 'ri-checkbox-circle-line', avatarColor: 'success', change: 'neutral', changeNumber: '', subTitle: 'Current season' },
+      { title: 'Upcoming', value: String(upcoming), avatarIcon: 'ri-calendar-line', avatarColor: 'info', change: 'neutral', changeNumber: '', subTitle: 'Scheduled' },
+      { title: 'Completed', value: String(completed), avatarIcon: 'ri-archive-line', avatarColor: 'secondary', change: 'neutral', changeNumber: '', subTitle: 'Past seasons' }
+    ]
+  }, [data])
 
   const columns = useMemo(
     () => [
@@ -73,10 +89,6 @@ const LeagueList = () => {
             {row.original.name}
           </Typography>
         )
-      }),
-      columnHelper.accessor('region', {
-        header: 'Region',
-        cell: ({ row }) => <Typography>{row.original.region}</Typography>
       }),
       columnHelper.accessor('season', {
         header: 'Season',
@@ -183,9 +195,25 @@ const LeagueList = () => {
     initialState: { pagination: { pageSize: 10 } }
   })
 
-  const handleDeleteConfirm = () => {
-    setDeleteDialogOpen(false)
-    setLeagueToDelete(null)
+  const handleDeleteConfirm = async () => {
+    if (!leagueToDelete?.id) {
+      setDeleteDialogOpen(false)
+      setLeagueToDelete(null)
+      return
+    }
+    try {
+      const res = await fetch(`/api/leagues/${leagueToDelete.id}`, { method: 'DELETE' })
+      if (res.ok) {
+        setData(prev => prev.filter(l => l.id !== leagueToDelete.id))
+        setDeleteDialogOpen(false)
+        setLeagueToDelete(null)
+      }
+    } catch {
+      // ignore
+    } finally {
+      setDeleteDialogOpen(false)
+      setLeagueToDelete(null)
+    }
   }
 
   return (
@@ -201,7 +229,7 @@ const LeagueList = () => {
         </div>
 
         <div className='grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4'>
-          {LeagueCardsData.map((item, i) => (
+          {leagueCardsData.map((item, i) => (
             <HorizontalWithSubtitle key={i} {...item} />
           ))}
         </div>
@@ -246,7 +274,13 @@ const LeagueList = () => {
                 ))}
               </thead>
               <tbody>
-                {table.getFilteredRowModel().rows.length === 0 ? (
+                {loading ? (
+                  <tr>
+                    <td colSpan={columns.length} className='text-center'>
+                      Loading...
+                    </td>
+                  </tr>
+                ) : table.getFilteredRowModel().rows.length === 0 ? (
                   <tr>
                     <td colSpan={columns.length} className='text-center'>
                       No leagues found
@@ -276,7 +310,7 @@ const LeagueList = () => {
         </Card>
       </div>
 
-      <AddLeagueDrawer open={addDrawerOpen} onClose={() => setAddDrawerOpen(false)} />
+      <AddLeagueDrawer open={addDrawerOpen} onClose={() => setAddDrawerOpen(false)} onSuccess={fetchLeagues} />
       <EditLeagueDrawer
         open={editDrawerOpen}
         onClose={() => {
@@ -284,6 +318,7 @@ const LeagueList = () => {
           setSelectedLeague(null)
         }}
         league={selectedLeague}
+        onSuccess={fetchLeagues}
       />
 
       <StandingsModal
