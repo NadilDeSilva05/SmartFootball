@@ -118,7 +118,7 @@ const MatchPastResults = () => {
     return m
   }, [leagues])
 
-  const getRefereeName = id => referees.find(r => r.id === id)?.fullName || '-'
+  const getRefereeName = useCallback(id => referees.find(r => r.id === id)?.fullName || '-', [referees])
 
   const data = useMemo(() => {
     return rawResults.map(m => ({
@@ -136,7 +136,7 @@ const MatchPastResults = () => {
       goals: m.goals || [],
       cards: m.cards || []
     }))
-  }, [rawResults, clubMap, leagueMap, referees])
+  }, [rawResults, clubMap, leagueMap, getRefereeName])
 
   const resultCardsData = useMemo(() => {
     const total = data.length

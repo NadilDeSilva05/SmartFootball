@@ -86,9 +86,9 @@ const MatchAssignReferees = () => {
     return m
   }, [clubs])
 
-  const getRefereeName = id => referees.find(r => r.id === id)?.fullName || '-'
-  const getAssignment = m => (m.referees && typeof m.referees === 'object' ? m.referees : {}) || {}
-  const isAssigned = m => !!getAssignment(m)?.mainReferee
+  const getRefereeName = useCallback(id => referees.find(r => r.id === id)?.fullName || '-', [referees])
+  const getAssignment = useCallback(m => (m.referees && typeof m.referees === 'object' ? m.referees : {}) || {}, [])
+  const isAssigned = useCallback(m => !!getAssignment(m)?.mainReferee, [getAssignment])
 
   const [leagues, setLeagues] = useState([])
 
@@ -128,7 +128,7 @@ const MatchAssignReferees = () => {
       fourthOfficialName: getRefereeName(a.fourthOfficial),
       assigned: isAssigned(m)
     }
-  }), [rawMatches, clubs, referees, clubMap, leagueMap])
+  }), [rawMatches, clubMap, leagueMap, getRefereeName, getAssignment, isAssigned])
 
   const assignCardsData = useMemo(() => {
     const total = rawMatches.length
@@ -139,7 +139,7 @@ const MatchAssignReferees = () => {
       { title: 'Pending', value: String(pending), avatarIcon: 'ri-time-line', avatarColor: 'warning', change: 'neutral', changeNumber: '', subTitle: 'Awaiting referees' },
       { title: 'Assigned', value: String(assigned), avatarIcon: 'ri-checkbox-circle-line', avatarColor: 'success', change: 'neutral', changeNumber: '', subTitle: 'Referees assigned' }
     ]
-  }, [rawMatches])
+  }, [rawMatches, isAssigned])
 
   const columns = useMemo(
     () => [

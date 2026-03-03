@@ -20,6 +20,8 @@ export default function AddPlayerDrawer ({ open, onClose, clubId, onRequestSent 
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
+    password: '',
+    confirmPassword: '',
     commentaryName: '',
     jerseyNo: '',
     nicOrPassport: '',
@@ -44,6 +46,8 @@ export default function AddPlayerDrawer ({ open, onClose, clubId, onRequestSent 
     setFormData({
       fullName: '',
       email: '',
+      password: '',
+      confirmPassword: '',
       commentaryName: '',
       jerseyNo: '',
       nicOrPassport: '',
@@ -91,6 +95,9 @@ export default function AddPlayerDrawer ({ open, onClose, clubId, onRequestSent 
     if (!formData.fullName?.trim()) errors.fullName = 'Player name is required'
     if (!formData.email?.trim()) errors.email = 'Email is required'
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) errors.email = 'Enter a valid email'
+    if (!formData.password) errors.password = 'Password is required for player login'
+    else if (formData.password.length < 6) errors.password = 'Password must be at least 6 characters'
+    if (formData.password !== formData.confirmPassword) errors.confirmPassword = 'Passwords do not match'
     if (!formData.nicOrPassport?.trim()) errors.nicOrPassport = 'NIC/Passport is required'
     if (!formData.dateOfBirth) errors.dateOfBirth = 'Date of birth is required'
     if (formData.residentStatus === 'foreign' && !formData.visaNo?.trim()) errors.visaNo = 'Visa number is required for foreign players'
@@ -110,6 +117,7 @@ export default function AddPlayerDrawer ({ open, onClose, clubId, onRequestSent 
           clubId,
           fullName: formData.fullName,
           email: formData.email,
+          password: formData.password,
           commentaryName: formData.commentaryName,
           jerseyNo: formData.jerseyNo,
           nicOrPassport: formData.nicOrPassport,
@@ -166,6 +174,8 @@ export default function AddPlayerDrawer ({ open, onClose, clubId, onRequestSent 
           </Alert>
           <TextField fullWidth size='small' label='Player Full Name' value={formData.fullName} onChange={e => setFormData({ ...formData, fullName: e.target.value })} error={!!formErrors.fullName} helperText={formErrors.fullName} required />
           <TextField fullWidth size='small' label='Email' type='email' value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} error={!!formErrors.email} helperText={formErrors.email} required />
+          <TextField fullWidth size='small' label='Password' type='password' value={formData.password} onChange={e => setFormData({ ...formData, password: e.target.value })} error={!!formErrors.password} helperText={formErrors.password} placeholder='For player login (min 6 characters)' required />
+          <TextField fullWidth size='small' label='Confirm Password' type='password' value={formData.confirmPassword} onChange={e => setFormData({ ...formData, confirmPassword: e.target.value })} error={!!formErrors.confirmPassword} helperText={formErrors.confirmPassword} required />
           <TextField fullWidth size='small' label='Commentary Name' value={formData.commentaryName} onChange={e => setFormData({ ...formData, commentaryName: e.target.value })} placeholder='Name used in commentary' />
           <TextField fullWidth size='small' label='Jersey Number' value={formData.jerseyNo} onChange={e => setFormData({ ...formData, jerseyNo: e.target.value })} placeholder='e.g. 10' />
           <TextField fullWidth size='small' label='NIC No. or Passport Number' value={formData.nicOrPassport} onChange={e => setFormData({ ...formData, nicOrPassport: e.target.value })} error={!!formErrors.nicOrPassport} helperText={formErrors.nicOrPassport} required />

@@ -2,7 +2,7 @@
  * GET /api/player-requests � list (optional ?status=pending|approved|rejected&clubId=)
  * POST /api/player-requests � create request (club submits)
  */
-import { getFirestore } from '@/lib/firebase-admin'
+import { getAuth, getFirestore } from '@/lib/firebase-admin'
 import { COLLECTIONS } from '@/lib/firestore-collections'
 import { created, badRequest, serverError } from '@/app/api/lib/responses'
 
@@ -46,6 +46,7 @@ export async function POST (request) {
       playerId,
       fullName,
       email,
+      password,
       commentaryName,
       jerseyNo,
       nicOrPassport,
@@ -62,8 +63,39 @@ export async function POST (request) {
     if (!email?.trim()) {
       return badRequest('email is required')
     }
+    if (!password || typeof password !== 'string') {
+      return badRequest('password is required for player login')
+    }
+    if (password.length < 6) {
+      return badRequest('password must be at least 6 characters')
+    }
 
+    const auth = getAuth()
     const db = getFirestore()
+
+    let uid
+    try {
+      const userRecord = await auth.createUser({
+        email: email.trim(),
+        password,
+        displayName: fullName?.trim() || email.split('@')[0]
+      })
+      uid = userRecord.uid
+      await auth.setCustomUserClaims(uid, { role: 'player' })
+      await db.collection(COLLECTIONS.users).doc(uid).set({
+        email: email.trim(),
+        fullName: fullName?.trim() || userRecord.displayName || '',
+        role: 'player',
+        accountRole: 'player',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      })
+    } catch (e) {
+      if (e.code === 'auth/email-already-exists') {
+        return badRequest('An account with this email already exists')
+      }
+      throw e
+    }
     const submittedPlayerId = String(playerId || '').trim()
 
     let resolvedPlayerId = submittedPlayerId
@@ -106,6 +138,7 @@ export async function POST (request) {
       playerId: resolvedPlayerId,
       fullName: fullName.trim(),
       email: email.trim(),
+      uid,
       position: position ?? '',
       nicOrPassport: nicOrPassport ?? '',
       dateOfBirth: dateOfBirth ?? '',
