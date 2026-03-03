@@ -36,7 +36,7 @@ export default function AssignRefereesDrawer ({ open, onClose, match, onSave, re
       })
       setFormErrors({})
     }
-  }, [match])
+  }, [match, currentAssignment.mainReferee, currentAssignment.assistant1, currentAssignment.assistant2, currentAssignment.fourthOfficial])
 
   const selectedIds = [formData.mainReferee, formData.assistant1, formData.assistant2, formData.fourthOfficial].filter(Boolean)
   const hasDuplicate = selectedIds.length !== new Set(selectedIds).size

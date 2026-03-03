@@ -39,6 +39,7 @@ import HorizontalWithSubtitle from '@components/card-statistics/HorizontalWithSu
 import ConfirmationDialog from '@components/dialogs/confirmation-dialog'
 import AddPlayerDrawer from '@views/club/components/player/AddPlayerDrawer'
 import EditPlayerDrawer from '@views/club/components/player/EditPlayerDrawer'
+import PlayerIdCardDialog from '@views/club/components/player/PlayerIdCardDialog'
 
 // Style Imports
 import tableStyles from '@core/styles/table.module.css'
@@ -93,6 +94,8 @@ const ClubPlayerList = () => {
   const [selectedPlayer, setSelectedPlayer] = useState(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [playerToDelete, setPlayerToDelete] = useState(null)
+  const [idCardDialogOpen, setIdCardDialogOpen] = useState(false)
+  const [playerForIdCard, setPlayerForIdCard] = useState(null)
   const [requestSent, setRequestSent] = useState(false)
   const isMobile = useMediaQuery(theme => theme.breakpoints.down('md'))
 
@@ -272,6 +275,17 @@ const ClubPlayerList = () => {
               <OptionMenu
                 iconClassName='text-[22px] text-textSecondary'
                 options={[
+                  {
+                    text: 'ID Card',
+                    icon: 'ri-qr-code-line text-[22px]',
+                    menuItemProps: {
+                      className: 'flex items-center gap-2 text-textSecondary',
+                      onClick: () => {
+                        setPlayerForIdCard(item)
+                        setIdCardDialogOpen(true)
+                      }
+                    }
+                  },
                   {
                     text: 'Edit',
                     icon: 'ri-edit-box-line text-[22px]',
@@ -466,7 +480,10 @@ const ClubPlayerList = () => {
                         {player.source === 'player' && player.status === 'approved' && (
                           <>
                             <Divider sx={{ my: 2 }} />
-                            <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
+                            <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                              <Button size='small' variant='outlined' startIcon={<i className='ri-qr-code-line' />} onClick={() => { setPlayerForIdCard(player); setIdCardDialogOpen(true) }}>
+                                ID Card
+                              </Button>
                               <Button size='small' variant='outlined' startIcon={<i className='ri-edit-box-line' />} onClick={() => { setSelectedPlayer(player); setEditDrawerOpen(true) }}>
                                 Edit
                               </Button>
@@ -552,6 +569,16 @@ const ClubPlayerList = () => {
         }}
         player={selectedPlayer}
         onSaved={() => loadData()}
+      />
+
+      <PlayerIdCardDialog
+        open={idCardDialogOpen}
+        onClose={() => {
+          setIdCardDialogOpen(false)
+          setPlayerForIdCard(null)
+        }}
+        player={playerForIdCard}
+        clubName={club?.clubName}
       />
 
       <ConfirmationDialog

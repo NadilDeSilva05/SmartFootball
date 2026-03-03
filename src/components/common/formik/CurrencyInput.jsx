@@ -28,14 +28,6 @@ const CurrencyInput = props => {
     value
   } = props
 
-  const fakeChangeEvent = {
-    target: {
-      type: 'number',
-      name,
-      id
-    }
-  }
-
   const valueInCents = currency(value).intValue
   const valueAbsTrunc = Math.trunc(Math.abs(valueInCents))
 
@@ -69,11 +61,16 @@ const CurrencyInput = props => {
         return
       }
 
-      // Enforce our division with currency to prevent rounding errors
-      fakeChangeEvent.target.value = currency(nextValue / 100).value
-      onChange(fakeChangeEvent)
+      onChange({
+        target: {
+          type: 'number',
+          name,
+          id,
+          value: currency(nextValue / 100).value
+        }
+      })
     },
-    [max, onChange, valueInCents, fakeChangeEvent]
+    [max, onChange, valueInCents, name, id]
   )
 
   const handleChange = useCallback(() => {

@@ -19,6 +19,8 @@ export default function AddCoachDrawer ({ open, onClose, clubId, onRequestSent }
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
+    password: '',
+    confirmPassword: '',
     role: 'assistant_coach',
     license: 'C',
     nicOrPassport: '',
@@ -29,7 +31,7 @@ export default function AddCoachDrawer ({ open, onClose, clubId, onRequestSent }
   const [submitting, setSubmitting] = useState(false)
 
   const resetForm = () => {
-    setFormData({ fullName: '', email: '', role: 'assistant_coach', license: 'C', nicOrPassport: '', dateOfBirth: '' })
+    setFormData({ fullName: '', email: '', password: '', confirmPassword: '', role: 'assistant_coach', license: 'C', nicOrPassport: '', dateOfBirth: '' })
     setFormErrors({})
     setSubmitError('')
   }
@@ -41,6 +43,9 @@ export default function AddCoachDrawer ({ open, onClose, clubId, onRequestSent }
     if (!formData.fullName?.trim()) errors.fullName = 'Coach name is required'
     if (!formData.email?.trim()) errors.email = 'Email is required'
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) errors.email = 'Enter a valid email'
+    if (!formData.password) errors.password = 'Password is required for coach login'
+    else if (formData.password.length < 6) errors.password = 'Password must be at least 6 characters'
+    if (formData.password !== formData.confirmPassword) errors.confirmPassword = 'Passwords do not match'
     if (!formData.nicOrPassport?.trim()) errors.nicOrPassport = 'NIC/Passport is required'
     if (!formData.dateOfBirth) errors.dateOfBirth = 'Date of birth is required'
     if (formData.role !== 'analyst' && !formData.license) errors.license = 'License is required'
@@ -59,6 +64,7 @@ export default function AddCoachDrawer ({ open, onClose, clubId, onRequestSent }
           clubId,
           fullName: formData.fullName.trim(),
           email: formData.email.trim(),
+          password: formData.password,
           role: formData.role,
           license: formData.role === 'analyst' ? '' : formData.license,
           nicOrPassport: formData.nicOrPassport.trim(),
@@ -102,6 +108,8 @@ export default function AddCoachDrawer ({ open, onClose, clubId, onRequestSent }
           </Alert>
           <TextField fullWidth size='small' label='Coach Full Name' value={formData.fullName} onChange={e => setFormData({ ...formData, fullName: e.target.value })} error={!!formErrors.fullName} helperText={formErrors.fullName} required />
           <TextField fullWidth size='small' label='Email' type='email' value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} error={!!formErrors.email} helperText={formErrors.email} required />
+          <TextField fullWidth size='small' label='Password' type='password' value={formData.password} onChange={e => setFormData({ ...formData, password: e.target.value })} error={!!formErrors.password} helperText={formErrors.password} placeholder='For coach login (min 6 characters)' required />
+          <TextField fullWidth size='small' label='Confirm Password' type='password' value={formData.confirmPassword} onChange={e => setFormData({ ...formData, confirmPassword: e.target.value })} error={!!formErrors.confirmPassword} helperText={formErrors.confirmPassword} required />
           <FormControl fullWidth size='small'>
             <InputLabel id='add-role-label'>Coach Role</InputLabel>
             <Select labelId='add-role-label' label='Coach Role' value={formData.role} onChange={e => setFormData({ ...formData, role: e.target.value })}>

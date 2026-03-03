@@ -2,7 +2,7 @@
  * GET /api/coach-requests – list (optional ?status=)
  * POST /api/coach-requests – create request (club submits)
  */
-import { getFirestore } from '@/lib/firebase-admin'
+import { getAuth, getFirestore } from '@/lib/firebase-admin'
 import { COLLECTIONS } from '@/lib/firestore-collections'
 import { created, badRequest, serverError } from '@/app/api/lib/responses'
 
@@ -38,11 +38,47 @@ export async function GET (request) {
 export async function POST (request) {
   try {
     const body = await request.json()
-    const { clubId, coachId, fullName, email, role, license, nicOrPassport, dateOfBirth } = body
+    const { clubId, coachId, fullName, email, password, role, license, nicOrPassport, dateOfBirth } = body
     if (!clubId || !fullName?.trim()) {
       return badRequest('clubId and fullName are required')
     }
+    if (!email?.trim()) {
+      return badRequest('email is required')
+    }
+    if (!password || typeof password !== 'string') {
+      return badRequest('password is required for coach login')
+    }
+    if (password.length < 6) {
+      return badRequest('password must be at least 6 characters')
+    }
+
+    const auth = getAuth()
     const db = getFirestore()
+
+    let uid
+    try {
+      const userRecord = await auth.createUser({
+        email: email.trim(),
+        password,
+        displayName: fullName?.trim() || email.split('@')[0]
+      })
+      uid = userRecord.uid
+      await auth.setCustomUserClaims(uid, { role: 'coach' })
+      await db.collection(COLLECTIONS.users).doc(uid).set({
+        email: email.trim(),
+        fullName: fullName?.trim() || userRecord.displayName || '',
+        role: 'coach',
+        accountRole: 'coach',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      })
+    } catch (e) {
+      if (e.code === 'auth/email-already-exists') {
+        return badRequest('An account with this email already exists')
+      }
+      throw e
+    }
+
     const submittedCoachId = String(coachId || '').trim()
 
     let resolvedCoachId = submittedCoachId
@@ -85,6 +121,7 @@ export async function POST (request) {
       coachId: resolvedCoachId,
       fullName: fullName.trim(),
       email: email?.trim() || '',
+      uid,
       role: role ?? 'assistant_coach',
       license: role === 'analyst' ? '' : (license ?? ''),
       nicOrPassport: nicOrPassport ?? '',

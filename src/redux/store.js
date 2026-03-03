@@ -1,5 +1,6 @@
 import { combineReducers, configureStore } from '@reduxjs/toolkit'
 import authenticationReducer from './slices/authenticationSlice'
+import attendanceReducer from './slices/attendanceSlice'
 
 // Stub reducers (slices removed): same state shape, no-op
 const stub = (init = {}) => (state = init, action) => state
@@ -54,7 +55,7 @@ const appReducer = combineReducers({
   eventReducer: stub({ events: [] }),
   cashflowReducer: stub({ getCashflowSuccessData: null, isGetCashflowLoading: false }),
   tasksReducer: stub({}),
-  attendanceReducer: stub({}),
+  attendance: attendanceReducer,
   loanReducer: stub({ loanList: [] }),
   memberFeesReducer: stub({
     memberFeesList: [],
