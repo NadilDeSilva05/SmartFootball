@@ -1,15 +1,13 @@
 'use client'
 
-// React Imports
-import { useState } from 'react'
-
-// MUI Imports
+import { useEffect, useMemo, useState, useCallback } from 'react'
 import Card from '@mui/material/Card'
 import CardHeader from '@mui/material/CardHeader'
 import CardContent from '@mui/material/CardContent'
 import Typography from '@mui/material/Typography'
 import Button from '@mui/material/Button'
 import TextField from '@mui/material/TextField'
+import Chip from '@mui/material/Chip'
 import Table from '@mui/material/Table'
 import TableBody from '@mui/material/TableBody'
 import TableCell from '@mui/material/TableCell'
@@ -19,28 +17,120 @@ import Dialog from '@mui/material/Dialog'
 import DialogTitle from '@mui/material/DialogTitle'
 import DialogContent from '@mui/material/DialogContent'
 import DialogActions from '@mui/material/DialogActions'
+import Box from '@mui/material/Box'
+import IconButton from '@mui/material/IconButton'
+import Alert from '@mui/material/Alert'
+import CircularProgress from '@mui/material/CircularProgress'
+import HorizontalWithSubtitle from '@components/card-statistics/HorizontalWithSubtitle'
+import { LICENSE_OPTIONS, ROLE_OPTIONS } from '@views/club/constants'
 
-const PENDING_COACH_REQUESTS = [
-  { id: '1', name: 'Michael Brown', club: 'City FC', role: 'Assistant Coach', email: 'michael@club.com', requestedAt: '2025-02-02' },
-  { id: '2', name: 'Sarah Gomes', club: 'Rovers FC', role: 'Analyst', email: 'sarah@club.com', requestedAt: '2025-02-03' }
-]
+const dateText = value => (value ? value.slice(0, 10) : '-')
 
 const CoachRequests = () => {
-  const [pending, setPending] = useState(PENDING_COACH_REQUESTS)
+  const [requests, setRequests] = useState([])
+  const [clubs, setClubs] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false)
   const [selectedRequest, setSelectedRequest] = useState(null)
   const [rejectReason, setRejectReason] = useState('')
+  const [reviewSubmitting, setReviewSubmitting] = useState(false)
 
-  const handleApprove = id => {
-    setPending(prev => prev.filter(r => r.id !== id))
+  const [detailsOpen, setDetailsOpen] = useState(false)
+  const [selectedDetails, setSelectedDetails] = useState(null)
+
+  const loadData = useCallback(async () => {
+    try {
+      setLoading(true)
+      setError('')
+
+      const [requestsRes, clubsRes] = await Promise.all([
+        fetch('/api/coach-requests', { cache: 'no-store' }),
+        fetch('/api/clubs', { cache: 'no-store' })
+      ])
+
+      if (!requestsRes.ok || !clubsRes.ok) {
+        throw new Error('Failed to load coach requests')
+      }
+
+      const [requestsPayload, clubsPayload] = await Promise.all([
+        requestsRes.json().catch(() => []),
+        clubsRes.json().catch(() => [])
+      ])
+
+      setRequests(Array.isArray(requestsPayload) ? requestsPayload : [])
+      setClubs(Array.isArray(clubsPayload) ? clubsPayload : [])
+    } catch (e) {
+      setError(e?.message || 'Failed to load coach requests')
+      setRequests([])
+      setClubs([])
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    loadData()
+  }, [loadData])
+
+  const clubMap = useMemo(() => {
+    const map = {}
+    clubs.forEach(club => {
+      map[club.id] = club.clubName || club.name || '-'
+    })
+    return map
+  }, [clubs])
+
+  const pending = useMemo(() => requests.filter(r => r.status === 'pending'), [requests])
+  const approved = useMemo(() => requests.filter(r => r.status === 'approved'), [requests])
+  const rejected = useMemo(() => requests.filter(r => r.status === 'rejected'), [requests])
+
+  const cards = useMemo(() => [
+    { title: 'Pending', value: String(pending.length), avatarIcon: 'ri-time-line', avatarColor: 'warning', change: 'neutral', changeNumber: '0', subTitle: 'Waiting for review' },
+    { title: 'Approved', value: String(approved.length), avatarIcon: 'ri-checkbox-circle-line', avatarColor: 'success', change: 'neutral', changeNumber: '0', subTitle: 'Accepted requests' },
+    { title: 'Rejected', value: String(rejected.length), avatarIcon: 'ri-close-circle-line', avatarColor: 'error', change: 'neutral', changeNumber: '0', subTitle: 'Rejected requests' }
+  ], [pending.length, approved.length, rejected.length])
+
+  const handleApprove = async requestId => {
+    try {
+      setReviewSubmitting(true)
+      const res = await fetch(`/api/coach-requests/${requestId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'approved' })
+      })
+      const payload = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(payload?.error || 'Failed to approve request')
+      loadData()
+    } catch (e) {
+      setError(e?.message || 'Failed to approve request')
+    } finally {
+      setReviewSubmitting(false)
+    }
   }
 
-  const handleReject = () => {
-    if (selectedRequest) {
-      setPending(prev => prev.filter(r => r.id !== selectedRequest.id))
+  const handleReject = async () => {
+    if (!selectedRequest?.id || !rejectReason.trim()) return
+
+    try {
+      setReviewSubmitting(true)
+      const res = await fetch(`/api/coach-requests/${selectedRequest.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'rejected', reason: rejectReason.trim() })
+      })
+      const payload = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(payload?.error || 'Failed to reject request')
+
       setRejectDialogOpen(false)
       setSelectedRequest(null)
       setRejectReason('')
+      loadData()
+    } catch (e) {
+      setError(e?.message || 'Failed to reject request')
+    } finally {
+      setReviewSubmitting(false)
     }
   }
 
@@ -50,6 +140,11 @@ const CoachRequests = () => {
     setRejectDialogOpen(true)
   }
 
+  const openDetails = request => {
+    setSelectedDetails(request)
+    setDetailsOpen(true)
+  }
+
   return (
     <div className='space-y-6'>
       <div>
@@ -57,48 +152,112 @@ const CoachRequests = () => {
           Coach Requests
         </Typography>
         <Typography variant='body1' color='text.secondary'>
-          Review, approve or reject coach/analyst registration requests from clubs. If rejecting, provide a reason.
+          Review club coach and analyst registration requests, inspect details, and approve or reject.
         </Typography>
       </div>
 
+      {error && <Alert severity='error'>{error}</Alert>}
+
+      <div className='grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'>
+        {cards.map((item, i) => (
+          <HorizontalWithSubtitle key={i} {...item} />
+        ))}
+      </div>
+
       <Card>
-        <CardHeader title='Pending Coach / Analyst Requests' />
+        <CardHeader title='Pending Requests' />
+        <CardContent>
+          {loading ? (
+            <Box sx={{ py: 3, display: 'flex', justifyContent: 'center' }}>
+              <CircularProgress size={22} />
+            </Box>
+          ) : (
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Coach</TableCell>
+                  <TableCell>Club</TableCell>
+                  <TableCell>Role</TableCell>
+                  <TableCell>License</TableCell>
+                  <TableCell>Requested</TableCell>
+                  <TableCell align='right'>Actions</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {pending.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} align='center'>No pending requests</TableCell>
+                  </TableRow>
+                ) : (
+                  pending.map(request => (
+                    <TableRow key={request.id}>
+                      <TableCell>
+                        <Typography className='font-medium'>{request.fullName}</Typography>
+                        <Typography variant='caption' color='text.secondary'>{request.coachId}</Typography>
+                      </TableCell>
+                      <TableCell>{clubMap[request.clubId] || '-'}</TableCell>
+                      <TableCell>{ROLE_OPTIONS.find(o => o.value === request.role)?.label ?? request.role}</TableCell>
+                      <TableCell>{request.role === 'analyst' ? '-' : (LICENSE_OPTIONS.find(o => o.value === request.license)?.label ?? request.license ?? '-')}</TableCell>
+                      <TableCell>{dateText(request.createdAt)}</TableCell>
+                      <TableCell align='right'>
+                        <Button size='small' variant='outlined' sx={{ mr: 1 }} onClick={() => openDetails(request)}>
+                          Details
+                        </Button>
+                        <Button size='small' color='success' variant='outlined' sx={{ mr: 1 }} disabled={reviewSubmitting} onClick={() => handleApprove(request.id)}>
+                          Approve
+                        </Button>
+                        <Button size='small' color='error' variant='outlined' disabled={reviewSubmitting} onClick={() => openRejectDialog(request)}>
+                          Reject
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader title='Reviewed Requests' />
         <CardContent>
           <Table>
             <TableHead>
               <TableRow>
-                <TableCell>Name</TableCell>
+                <TableCell>Coach</TableCell>
                 <TableCell>Club</TableCell>
-                <TableCell>Role</TableCell>
-                <TableCell>Email</TableCell>
-                <TableCell>Requested</TableCell>
-                <TableCell align='right'>Actions</TableCell>
+                <TableCell>Status</TableCell>
+                <TableCell>Reviewed At</TableCell>
+                <TableCell>Notes</TableCell>
+                <TableCell align='right'>Action</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {pending.length === 0 ? (
+              {[...approved, ...rejected].length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} align='center'>
-                    No pending requests
-                  </TableCell>
+                  <TableCell colSpan={6} align='center'>No reviewed requests</TableCell>
                 </TableRow>
               ) : (
-                pending.map(req => (
-                  <TableRow key={req.id}>
+                [...approved, ...rejected].map(request => (
+                  <TableRow key={request.id}>
                     <TableCell>
-                      <Typography className='font-medium'>{req.name}</Typography>
+                      <Typography className='font-medium'>{request.fullName}</Typography>
+                      <Typography variant='caption' color='text.secondary'>{request.coachId}</Typography>
                     </TableCell>
-                    <TableCell>{req.club}</TableCell>
-                    <TableCell>{req.role}</TableCell>
-                    <TableCell>{req.email}</TableCell>
-                    <TableCell>{req.requestedAt}</TableCell>
+                    <TableCell>{clubMap[request.clubId] || '-'}</TableCell>
+                    <TableCell>
+                      <Chip
+                        size='small'
+                        variant='tonal'
+                        label={request.status}
+                        color={request.status === 'approved' ? 'success' : 'error'}
+                      />
+                    </TableCell>
+                    <TableCell>{dateText(request.reviewedAt || request.updatedAt)}</TableCell>
+                    <TableCell>{request.reviewReason || '-'}</TableCell>
                     <TableCell align='right'>
-                      <Button size='small' color='success' variant='outlined' sx={{ mr: 1 }} onClick={() => handleApprove(req.id)}>
-                        Approve
-                      </Button>
-                      <Button size='small' color='error' variant='outlined' onClick={() => openRejectDialog(req)}>
-                        Reject
-                      </Button>
+                      <Button size='small' variant='outlined' onClick={() => openDetails(request)}>View</Button>
                     </TableCell>
                   </TableRow>
                 ))
@@ -114,14 +273,14 @@ const CoachRequests = () => {
           {selectedRequest && (
             <>
               <Typography variant='body2' color='text.secondary' sx={{ mb: 2 }}>
-                Rejecting request for <strong>{selectedRequest.name}</strong> ({selectedRequest.club}). Please provide a reason (required):
+                Rejecting request for <strong>{selectedRequest.fullName}</strong> ({clubMap[selectedRequest.clubId] || '-'})
               </Typography>
               <TextField
                 fullWidth
                 multiline
                 rows={3}
                 label='Rejection reason'
-                placeholder='e.g. Certification not verified'
+                placeholder='Explain why this request is rejected'
                 value={rejectReason}
                 onChange={e => setRejectReason(e.target.value)}
                 required
@@ -131,9 +290,36 @@ const CoachRequests = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => { setRejectDialogOpen(false); setSelectedRequest(null) }}>Cancel</Button>
-          <Button variant='contained' color='error' onClick={handleReject} disabled={!rejectReason?.trim()}>
+          <Button variant='contained' color='error' onClick={handleReject} disabled={!rejectReason.trim() || reviewSubmitting}>
             Reject Request
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={detailsOpen} onClose={() => { setDetailsOpen(false); setSelectedDetails(null) }} maxWidth='md' fullWidth>
+        <DialogTitle className='flex items-center justify-between'>
+          <span>Coach Request Details</span>
+          <IconButton size='small' onClick={() => { setDetailsOpen(false); setSelectedDetails(null) }}><i className='ri-close-line' /></IconButton>
+        </DialogTitle>
+        <DialogContent>
+          {!selectedDetails ? null : (
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '180px 1fr' }, rowGap: 1.2, columnGap: 2 }}>
+              <Typography color='text.secondary'>Coach Name</Typography><Typography>{selectedDetails.fullName || '-'}</Typography>
+              <Typography color='text.secondary'>Coach ID</Typography><Typography>{selectedDetails.coachId || '-'}</Typography>
+              <Typography color='text.secondary'>Club</Typography><Typography>{clubMap[selectedDetails.clubId] || '-'}</Typography>
+              <Typography color='text.secondary'>Email</Typography><Typography>{selectedDetails.email || '-'}</Typography>
+              <Typography color='text.secondary'>Role</Typography><Typography>{ROLE_OPTIONS.find(o => o.value === selectedDetails.role)?.label ?? selectedDetails.role ?? '-'}</Typography>
+              <Typography color='text.secondary'>License</Typography><Typography>{selectedDetails.role === 'analyst' ? '-' : (LICENSE_OPTIONS.find(o => o.value === selectedDetails.license)?.label ?? selectedDetails.license ?? '-')}</Typography>
+              <Typography color='text.secondary'>NIC/Passport</Typography><Typography>{selectedDetails.nicOrPassport || '-'}</Typography>
+              <Typography color='text.secondary'>Date of Birth</Typography><Typography>{selectedDetails.dateOfBirth || '-'}</Typography>
+              <Typography color='text.secondary'>Status</Typography><Typography>{selectedDetails.status || '-'}</Typography>
+              <Typography color='text.secondary'>Submitted At</Typography><Typography>{selectedDetails.createdAt || '-'}</Typography>
+              <Typography color='text.secondary'>Review Notes</Typography><Typography>{selectedDetails.reviewReason || '-'}</Typography>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button variant='outlined' onClick={() => { setDetailsOpen(false); setSelectedDetails(null) }}>Close</Button>
         </DialogActions>
       </Dialog>
     </div>

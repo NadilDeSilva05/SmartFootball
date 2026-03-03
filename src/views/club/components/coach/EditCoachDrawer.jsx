@@ -11,10 +11,15 @@ import FormControl from '@mui/material/FormControl'
 import InputLabel from '@mui/material/InputLabel'
 import Select from '@mui/material/Select'
 import MenuItem from '@mui/material/MenuItem'
+import Alert from '@mui/material/Alert'
+import CircularProgress from '@mui/material/CircularProgress'
 import { LICENSE_OPTIONS, ROLE_OPTIONS } from '@views/club/constants'
 
-export default function EditCoachDrawer ({ open, onClose, coach }) {
+export default function EditCoachDrawer ({ open, onClose, coach, onSaved }) {
   const [formData, setFormData] = useState({ coachId: '', fullName: '', role: 'assistant_coach', license: 'C', nicOrPassport: '', dateOfBirth: '' })
+  const [formErrors, setFormErrors] = useState({})
+  const [submitError, setSubmitError] = useState('')
+  const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
     if (coach) {
@@ -29,9 +34,43 @@ export default function EditCoachDrawer ({ open, onClose, coach }) {
     }
   }, [coach])
 
-  const handleSubmit = e => {
+  const handleSubmit = async e => {
     e.preventDefault()
-    onClose()
+    const errors = {}
+    if (!formData.fullName?.trim()) errors.fullName = 'Coach name is required'
+    if (!formData.nicOrPassport?.trim()) errors.nicOrPassport = 'NIC/Passport is required'
+    if (!formData.dateOfBirth) errors.dateOfBirth = 'Date of birth is required'
+    if (formData.role !== 'analyst' && !formData.license) errors.license = 'License is required'
+    setFormErrors(errors)
+    if (Object.keys(errors).length > 0) return
+
+    try {
+      setSubmitting(true)
+      setSubmitError('')
+      const res = await fetch(`/api/club-coaches/${coach.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fullName: formData.fullName.trim(),
+          role: formData.role,
+          license: formData.role === 'analyst' ? '' : formData.license,
+          nicOrPassport: formData.nicOrPassport.trim(),
+          dateOfBirth: formData.dateOfBirth
+        })
+      })
+
+      const payload = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(payload?.error || 'Failed to update coach')
+      }
+
+      onSaved?.()
+      onClose?.()
+    } catch (error) {
+      setSubmitError(error?.message || 'Failed to update coach')
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const isAnalyst = formData.role === 'analyst'
@@ -46,8 +85,9 @@ export default function EditCoachDrawer ({ open, onClose, coach }) {
       <div className='p-5 overflow-y-auto'>
         {coach && (
           <form onSubmit={handleSubmit} className='flex flex-col gap-4'>
-            <TextField fullWidth size='small' label='Coach Id' value={formData.coachId} onChange={e => setFormData({ ...formData, coachId: e.target.value })} />
-            <TextField fullWidth size='small' label='Coach Full Name' value={formData.fullName} onChange={e => setFormData({ ...formData, fullName: e.target.value })} required />
+            {submitError && <Alert severity='error'>{submitError}</Alert>}
+            <TextField fullWidth size='small' label='Coach Id' value={formData.coachId} disabled />
+            <TextField fullWidth size='small' label='Coach Full Name' value={formData.fullName} onChange={e => setFormData({ ...formData, fullName: e.target.value })} error={!!formErrors.fullName} helperText={formErrors.fullName} required />
             <FormControl fullWidth size='small'>
               <InputLabel id='edit-role-label'>Coach Role</InputLabel>
               <Select labelId='edit-role-label' label='Coach Role' value={formData.role} onChange={e => setFormData({ ...formData, role: e.target.value })}>
@@ -57,7 +97,7 @@ export default function EditCoachDrawer ({ open, onClose, coach }) {
               </Select>
             </FormControl>
             {!isAnalyst && (
-              <FormControl fullWidth size='small'>
+              <FormControl fullWidth size='small' error={!!formErrors.license}>
                 <InputLabel id='edit-license-label'>Coach License</InputLabel>
                 <Select labelId='edit-license-label' label='Coach License' value={formData.license} onChange={e => setFormData({ ...formData, license: e.target.value })}>
                   {LICENSE_OPTIONS.map(opt => (
@@ -66,11 +106,11 @@ export default function EditCoachDrawer ({ open, onClose, coach }) {
                 </Select>
               </FormControl>
             )}
-            <TextField fullWidth size='small' label='NIC or Passport No.' value={formData.nicOrPassport} onChange={e => setFormData({ ...formData, nicOrPassport: e.target.value })} />
-            <TextField fullWidth size='small' label='Date of Birth' type='date' value={formData.dateOfBirth} onChange={e => setFormData({ ...formData, dateOfBirth: e.target.value })} InputLabelProps={{ shrink: true }} />
+            <TextField fullWidth size='small' label='NIC or Passport No.' value={formData.nicOrPassport} onChange={e => setFormData({ ...formData, nicOrPassport: e.target.value })} error={!!formErrors.nicOrPassport} helperText={formErrors.nicOrPassport} />
+            <TextField fullWidth size='small' label='Date of Birth' type='date' value={formData.dateOfBirth} onChange={e => setFormData({ ...formData, dateOfBirth: e.target.value })} InputLabelProps={{ shrink: true }} error={!!formErrors.dateOfBirth} helperText={formErrors.dateOfBirth} />
             <div className='flex gap-2 mt-2'>
-              <Button type='submit' variant='contained'>Save</Button>
-              <Button type='button' variant='outlined' color='secondary' onClick={onClose}>Cancel</Button>
+              <Button type='submit' variant='contained' disabled={submitting} startIcon={submitting ? <CircularProgress size={16} color='inherit' /> : null}>Save</Button>
+              <Button type='button' variant='outlined' color='secondary' onClick={onClose} disabled={submitting}>Cancel</Button>
             </div>
           </form>
         )}

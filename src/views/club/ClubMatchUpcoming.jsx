@@ -1,7 +1,8 @@
 'use client'
 
 // React Imports
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
+import { useSelector } from 'react-redux'
 
 // MUI Imports
 import Box from '@mui/material/Box'
@@ -14,6 +15,8 @@ import Typography from '@mui/material/Typography'
 import TablePagination from '@mui/material/TablePagination'
 import Tabs from '@mui/material/Tabs'
 import Tab from '@mui/material/Tab'
+import Alert from '@mui/material/Alert'
+import CircularProgress from '@mui/material/CircularProgress'
 import useMediaQuery from '@mui/material/useMediaQuery'
 
 // Third-party Imports
@@ -34,27 +37,49 @@ import HorizontalWithSubtitle from '@components/card-statistics/HorizontalWithSu
 // Style Imports
 import tableStyles from '@core/styles/table.module.css'
 
-// Current club (can come from auth/context later)
-const MY_CLUB = 'City FC'
+const columnHelper = createColumnHelper()
 
-const MATCHES_DATA = [
-  { id: '1', leagueName: 'Premier League', homeTeamName: 'City FC', awayTeamName: 'Rovers FC', venue: 'National Stadium', date: '2025-02-15', time: '15:00' },
-  { id: '2', leagueName: 'Premier League', homeTeamName: 'Athletic Club', awayTeamName: 'Stars FC', venue: 'City Arena', date: '2025-02-16', time: '17:00' },
-  { id: '3', leagueName: 'Division One', homeTeamName: 'United SC', awayTeamName: 'City FC', venue: 'Regional Ground', date: '2025-02-18', time: '14:00' },
-  { id: '4', leagueName: 'Premier League', homeTeamName: 'Dynamo FC', awayTeamName: 'Rovers FC', venue: 'Stadium A', date: '2025-02-20', time: '16:00' },
-  { id: '5', leagueName: 'Premier League', homeTeamName: 'City FC', awayTeamName: 'United SC', venue: 'National Stadium', date: '2025-02-22', time: '15:00' }
-]
+const resolveCurrentClub = (clubs, user) => {
+  if (!Array.isArray(clubs) || clubs.length === 0 || !user) return null
 
-const isMyClubMatch = (homeTeamName, awayTeamName) => homeTeamName === MY_CLUB || awayTeamName === MY_CLUB
+  const userClubIds = [user?.clubId, user?.clubDocId, user?.club?.id]
+    .map(value => String(value || '').trim())
+    .filter(Boolean)
+  const userUids = [user?.uid, user?.id, user?.userId, user?.adminUserId]
+    .map(value => String(value || '').trim())
+    .filter(Boolean)
+  const userEmails = [user?.email, user?.emailAddress, user?.adminEmail]
+    .map(value => String(value || '').trim().toLowerCase())
+    .filter(Boolean)
 
-function getStatsForData(data) {
+  const byUserClubId = userClubIds.length
+    ? clubs.find(club => {
+      const clubDocId = String(club?.id || '').trim()
+      const businessClubId = String(club?.clubId || '').trim()
+      return userClubIds.includes(clubDocId) || userClubIds.includes(businessClubId)
+    })
+    : null
+  if (byUserClubId) return byUserClubId
+
+  const byAdminUid = userUids.length
+    ? clubs.find(club => userUids.includes(String(club?.adminUserId || '').trim()))
+    : null
+  if (byAdminUid) return byAdminUid
+
+  return userEmails.length
+    ? clubs.find(club => userEmails.includes(String(club?.adminEmail || '').trim().toLowerCase())) || null
+    : null
+}
+
+const getStatsForData = data => {
   const total = data.length
   const today = new Date().toISOString().slice(0, 10)
-  const todayCount = data.filter(m => m.date === today).length
+  const todayCount = data.filter(match => match.date === today).length
   const weekFromNow = new Date()
   weekFromNow.setDate(weekFromNow.getDate() + 7)
   const weekEnd = weekFromNow.toISOString().slice(0, 10)
-  const thisWeekCount = data.filter(m => m.date >= today && m.date <= weekEnd).length
+  const thisWeekCount = data.filter(match => match.date >= today && match.date <= weekEnd).length
+
   return [
     { title: 'Scheduled', value: String(total), avatarIcon: 'ri-calendar-check-line', avatarColor: 'primary', change: 'positive', changeNumber: '0', subTitle: 'Upcoming matches' },
     { title: 'Today', value: String(todayCount), avatarIcon: 'ri-calendar-today-line', avatarColor: 'success', change: 'neutral', changeNumber: '0', subTitle: 'Matches today' },
@@ -63,18 +88,111 @@ function getStatsForData(data) {
   ]
 }
 
-const columnHelper = createColumnHelper()
-
 const ClubMatchUpcoming = () => {
+  const user = useSelector(state => state?.authenticationReducer?.loginData?.user)
   const [tabValue, setTabValue] = useState(0)
   const [globalFilter, setGlobalFilter] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [rawMatches, setRawMatches] = useState([])
+  const [clubs, setClubs] = useState([])
+  const [leagues, setLeagues] = useState([])
   const isMobile = useMediaQuery(theme => theme.breakpoints.down('md'))
 
+  useEffect(() => {
+    let active = true
+
+    const loadData = async () => {
+      try {
+        setLoading(true)
+        setError('')
+
+        const [matchesRes, clubsRes, leaguesRes] = await Promise.all([
+          fetch('/api/matches?status=scheduled', { cache: 'no-store' }),
+          fetch('/api/clubs', { cache: 'no-store' }),
+          fetch('/api/leagues', { cache: 'no-store' })
+        ])
+
+        if (!matchesRes.ok || !clubsRes.ok || !leaguesRes.ok) {
+          throw new Error('Failed to load match management data')
+        }
+
+        const [matchesPayload, clubsPayload, leaguesPayload] = await Promise.all([
+          matchesRes.json().catch(() => []),
+          clubsRes.json().catch(() => []),
+          leaguesRes.json().catch(() => [])
+        ])
+
+        if (!active) return
+
+        setRawMatches(Array.isArray(matchesPayload) ? matchesPayload : [])
+        setClubs(Array.isArray(clubsPayload) ? clubsPayload : [])
+        setLeagues(Array.isArray(leaguesPayload) ? leaguesPayload : [])
+      } catch (e) {
+        if (!active) return
+        setError(e?.message || 'Unable to load upcoming matches')
+        setRawMatches([])
+        setClubs([])
+        setLeagues([])
+      } finally {
+        if (active) setLoading(false)
+      }
+    }
+
+    loadData()
+
+    return () => {
+      active = false
+    }
+  }, [])
+
+  const clubMap = useMemo(() => {
+    const map = {}
+    clubs.forEach(club => {
+      map[club.id] = club.clubName || club.name || '-'
+    })
+
+    return map
+  }, [clubs])
+
+  const leagueMap = useMemo(() => {
+    const map = {}
+    leagues.forEach(league => {
+      map[league.id] = league.name || '-'
+    })
+
+    return map
+  }, [leagues])
+
+  const currentClub = useMemo(() => resolveCurrentClub(clubs, user), [clubs, user])
+  const currentClubId = currentClub?.id || null
+  const currentClubName = currentClub?.clubName || currentClub?.name || 'your club'
+
+  const matchesData = useMemo(
+    () => rawMatches.map(match => ({
+      id: match.id,
+      leagueName: leagueMap[match.leagueId] || '-',
+      homeClubId: match.homeClubId || null,
+      awayClubId: match.awayClubId || null,
+      homeTeamName: clubMap[match.homeClubId] || '-',
+      awayTeamName: clubMap[match.awayClubId] || '-',
+      venue: match.venue || '-',
+      date: match.matchDate || match.date || '',
+      time: match.matchTime || ''
+    })),
+    [rawMatches, leagueMap, clubMap]
+  )
+
   const filteredByTab = useMemo(() => {
+    const isMyClubMatch = match => {
+      if (!currentClubId) return false
+      return match.homeClubId === currentClubId || match.awayClubId === currentClubId
+    }
+
     return tabValue === 0
-      ? MATCHES_DATA.filter(m => isMyClubMatch(m.homeTeamName, m.awayTeamName))
-      : MATCHES_DATA.filter(m => !isMyClubMatch(m.homeTeamName, m.awayTeamName))
-  }, [tabValue])
+      ? matchesData.filter(isMyClubMatch)
+      : matchesData.filter(match => !isMyClubMatch(match))
+  }, [matchesData, tabValue, currentClubId])
 
   const matchCardsData = useMemo(() => getStatsForData(filteredByTab), [filteredByTab])
 
@@ -135,11 +253,13 @@ const ClubMatchUpcoming = () => {
           Upcoming Matches
         </Typography>
         <Typography variant='body1' color='text.secondary'>
-          View scheduled fixtures. Matches involving <strong>{MY_CLUB}</strong> are in My Club matches.
+          View scheduled fixtures. Matches involving <strong>{currentClubName}</strong> are in My Club matches.
         </Typography>
       </div>
 
-      <Tabs value={tabValue} onChange={(_, v) => setTabValue(v)} sx={{ borderBottom: 1, borderColor: 'divider' }}>
+      {error && <Alert severity='error'>{error}</Alert>}
+
+      <Tabs value={tabValue} onChange={(_, value) => setTabValue(value)} sx={{ borderBottom: 1, borderColor: 'divider' }}>
         <Tab label='My Club matches' />
         <Tab label='Other team matches' />
       </Tabs>
@@ -174,13 +294,19 @@ const ClubMatchUpcoming = () => {
           }}
         />
         <Divider />
-        {isMobile ? (
+
+        {loading ? (
+          <Box sx={{ p: 4, display: 'flex', justifyContent: 'center' }}>
+            <CircularProgress size={22} />
+          </Box>
+        ) : isMobile ? (
           <div className='p-4 flex flex-col gap-4'>
             {table.getFilteredRowModel().rows.length === 0 ? (
               <Typography color='text.secondary' className='text-center py-8'>No matches found</Typography>
             ) : (
               table.getRowModel().rows.map(row => {
                 const match = row.original
+
                 return (
                   <Card
                     key={match.id}
@@ -258,6 +384,7 @@ const ClubMatchUpcoming = () => {
             </table>
           </div>
         )}
+
         <TablePagination
           rowsPerPageOptions={[5, 10, 25]}
           component='div'

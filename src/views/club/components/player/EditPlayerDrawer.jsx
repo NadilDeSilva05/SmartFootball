@@ -11,9 +11,11 @@ import FormControl from '@mui/material/FormControl'
 import InputLabel from '@mui/material/InputLabel'
 import Select from '@mui/material/Select'
 import MenuItem from '@mui/material/MenuItem'
+import Alert from '@mui/material/Alert'
+import CircularProgress from '@mui/material/CircularProgress'
 import { POSITION_OPTIONS } from '@views/club/constants'
 
-export default function EditPlayerDrawer ({ open, onClose, player }) {
+export default function EditPlayerDrawer ({ open, onClose, player, onSaved }) {
   const [formData, setFormData] = useState({
     playerId: '',
     fullName: '',
@@ -25,26 +27,60 @@ export default function EditPlayerDrawer ({ open, onClose, player }) {
     visaNo: '',
     position: 'Forward'
   })
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
 
   useEffect(() => {
-    if (player) {
-      setFormData({
-        playerId: player.playerId ?? '',
-        fullName: player.fullName ?? '',
-        commentaryName: player.commentaryName ?? '',
-        jerseyNo: player.jerseyNo ?? '',
-        nicOrPassport: player.nicOrPassport ?? '',
-        dateOfBirth: player.dateOfBirth ?? '',
-        residentStatus: player.residentStatus ?? 'local',
-        visaNo: player.visaNo ?? '',
-        position: player.position ?? 'Forward'
-      })
-    }
+    if (!player) return
+    setFormData({
+      playerId: player.playerId ?? '',
+      fullName: player.fullName ?? '',
+      commentaryName: player.commentaryName ?? '',
+      jerseyNo: player.jerseyNo ?? '',
+      nicOrPassport: player.nicOrPassport ?? '',
+      dateOfBirth: player.dateOfBirth ?? '',
+      residentStatus: player.residentStatus ?? 'local',
+      visaNo: player.visaNo ?? '',
+      position: player.position ?? 'Forward'
+    })
+    setError('')
   }, [player])
 
-  const handleSubmit = e => {
+  const handleSubmit = async e => {
     e.preventDefault()
-    onClose()
+    if (!player?.id) return
+
+    try {
+      setSaving(true)
+      setError('')
+
+      const res = await fetch(`/api/club-players/${player.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fullName: formData.fullName,
+          commentaryName: formData.commentaryName,
+          jerseyNo: formData.jerseyNo,
+          nicOrPassport: formData.nicOrPassport,
+          dateOfBirth: formData.dateOfBirth,
+          residentStatus: formData.residentStatus,
+          visaNo: formData.visaNo,
+          position: formData.position
+        })
+      })
+
+      const payload = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(payload?.error || 'Failed to update player')
+      }
+
+      onSaved?.()
+      onClose?.()
+    } catch (err) {
+      setError(err?.message || 'Failed to update player')
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -57,9 +93,10 @@ export default function EditPlayerDrawer ({ open, onClose, player }) {
       </div>
       <Divider />
       <div className='p-5 overflow-y-auto'>
+        {error && <Alert severity='error' sx={{ mb: 2 }}>{error}</Alert>}
         {player && (
           <form onSubmit={handleSubmit} className='flex flex-col gap-4'>
-            <TextField fullWidth size='small' label='Player Id' value={formData.playerId} onChange={e => setFormData({ ...formData, playerId: e.target.value })} />
+            <TextField fullWidth size='small' label='Player Id' value={formData.playerId} disabled />
             <TextField fullWidth size='small' label='Player Full Name' value={formData.fullName} onChange={e => setFormData({ ...formData, fullName: e.target.value })} required />
             <TextField fullWidth size='small' label='Commentary Name' value={formData.commentaryName} onChange={e => setFormData({ ...formData, commentaryName: e.target.value })} />
             <TextField fullWidth size='small' label='Jersey Number' value={formData.jerseyNo} onChange={e => setFormData({ ...formData, jerseyNo: e.target.value })} />
@@ -84,8 +121,8 @@ export default function EditPlayerDrawer ({ open, onClose, player }) {
               </Select>
             </FormControl>
             <div className='flex gap-2 mt-2'>
-              <Button type='submit' variant='contained'>Save</Button>
-              <Button type='button' variant='outlined' color='secondary' onClick={onClose}>Cancel</Button>
+              <Button type='submit' variant='contained' disabled={saving} startIcon={saving ? <CircularProgress size={16} color='inherit' /> : null}>Save</Button>
+              <Button type='button' variant='outlined' color='secondary' onClick={onClose} disabled={saving}>Cancel</Button>
             </div>
           </form>
         )}

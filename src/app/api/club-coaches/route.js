@@ -12,8 +12,11 @@ export async function GET (request) {
     const clubId = searchParams.get('clubId')
     if (!clubId) return badRequest('clubId query required')
     const db = getFirestore()
-    const snap = await db.collection(COLLECTIONS.clubCoaches).where('clubId', '==', clubId).orderBy('fullName').get()
-    const list = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+    // Avoid Firestore composite index requirements: fetch by clubId then sort in memory.
+    const snap = await db.collection(COLLECTIONS.clubCoaches).where('clubId', '==', clubId).get()
+    const list = snap.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => String(a?.fullName || '').localeCompare(String(b?.fullName || '')))
     return Response.json(list)
   } catch (e) {
     console.error(e)

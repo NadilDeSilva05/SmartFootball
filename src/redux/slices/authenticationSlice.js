@@ -20,6 +20,17 @@ export const ROLE_REDIRECT_MAP = {
   [ROLES.REFEREE]: '/referee'
 }
 
+const normalizeRole = role => {
+  const value = String(role || '').trim().toLowerCase()
+  if (!value) return null
+  if (value === 'federation_admin' || value === 'federation-admin' || value === 'federation admin') return ROLES.FEDERATION_ADMIN
+  if (value === 'club_admin' || value === 'club-admin' || value === 'club admin' || value === 'clubadmin') return ROLES.CLUB_ADMIN
+  if (value === 'coach') return ROLES.COACH
+  if (value === 'player') return ROLES.PLAYER
+  if (value === 'referee') return ROLES.REFEREE
+  return value
+}
+
 export const requestSignIn = createAsyncThunk(
   'authentication/requestSignIn',
   async (
@@ -40,21 +51,23 @@ export const requestSignIn = createAsyncThunk(
       const userCred = await signInWithEmailAndPassword(auth, email, password)
       const token = await userCred.user.getIdToken()
       const tokenResult = await userCred.user.getIdTokenResult()
-      const role = tokenResult.claims?.role || tokenResult.claims?.accountRole
+      const role = normalizeRole(tokenResult.claims?.role || tokenResult.claims?.accountRole)
 
       const res = await fetch('/api/auth/me', {
         headers: { Authorization: `Bearer ${token}` }
       })
       const profile = res.ok ? await res.json() : {}
 
+      const profileRole = normalizeRole(profile.role || profile.accountRole)
       return {
         token,
         user: {
           uid: userCred.user.uid,
           email: userCred.user.email || email,
           fullName: profile.fullName || userCred.user.displayName || email?.split('@')[0] || '',
-          role: profile.role || role || ROLES.PLAYER,
-          accountRole: profile.accountRole || role
+          role: profileRole || role || ROLES.PLAYER,
+          accountRole: profileRole || role || ROLES.PLAYER,
+          clubId: profile.clubId || tokenResult.claims?.clubId || null
         }
       }
     } catch (error) {

@@ -6,6 +6,7 @@ import '@/app/globals.css'
 
 //Generated Icon CSS Imports namo buddhaya
 import '@assets/iconify-icons/generated-icons.css'
+import { AppRouterCacheProvider } from '@mui/material-nextjs/v15-appRouter'
 
 // Redux Provider
 import ReduxProvider from '@/redux/provider'
@@ -20,7 +21,9 @@ const RootLayout = ({ children }) => {
   return (
     <html id='__next' lang='en' dir='ltr'>
       <body className='flex is-full min-bs-full flex-auto flex-col' suppressHydrationWarning={true}>
-        <ReduxProvider>{children}</ReduxProvider>
+        <AppRouterCacheProvider>
+          <ReduxProvider>{children}</ReduxProvider>
+        </AppRouterCacheProvider>
       </body>
     </html>
   )
