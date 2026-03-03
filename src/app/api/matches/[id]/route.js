@@ -30,7 +30,7 @@ export async function PUT (request, { params }) {
     const ref = db.collection(COLLECTIONS.matches).doc(id)
     const doc = await ref.get()
     if (!doc.exists) return notFound('Match not found')
-    const allowed = ['leagueId', 'homeClubId', 'awayClubId', 'matchDate', 'matchTime', 'venue', 'referees', 'status', 'homeScore', 'awayScore', 'resultNotes']
+    const allowed = ['leagueId', 'homeClubId', 'awayClubId', 'matchDate', 'matchTime', 'venue', 'referees', 'status', 'homeScore', 'awayScore', 'resultNotes', 'goals', 'cards', 'halfTimeScore', 'attendance', 'refereeId']
     const updates = { updatedAt: new Date().toISOString() }
     allowed.forEach(k => { if (body[k] !== undefined) updates[k] = body[k] })
     await ref.update(updates)

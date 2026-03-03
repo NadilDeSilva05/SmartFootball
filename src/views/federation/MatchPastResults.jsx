@@ -1,7 +1,7 @@
 'use client'
 
 // React Imports
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 
 // MUI Imports
 import Box from '@mui/material/Box'
@@ -36,111 +36,128 @@ import AddResultDialog from '@views/federation/components/match/AddResultDialog'
 // Style Imports
 import tableStyles from '@core/styles/table.module.css'
 
-const RESULTS_DATA = [
-  {
-    id: '1',
-    homeTeam: 'City FC',
-    awayTeam: 'United SC',
-    homeScore: 2,
-    awayScore: 1,
-    date: '2025-02-01',
-    venue: 'National Stadium',
-    leagueName: 'Premier League',
-    referee: 'John Silva',
-    attendance: 12500,
-    halfTimeScore: '1-0',
-    goals: [
-      { minute: 23, scorer: 'A. Smith', team: 'home', type: 'open_play' },
-      { minute: 67, scorer: 'B. Jones', team: 'home', type: 'penalty' },
-      { minute: 89, scorer: 'C. Brown', team: 'away', type: 'open_play' }
-    ],
-    cards: [
-      { minute: 45, player: 'D. Lee', team: 'away', type: 'yellow' },
-      { minute: 78, player: 'E. Wilson', team: 'home', type: 'yellow' }
-    ]
-  },
-  {
-    id: '2',
-    homeTeam: 'Rovers FC',
-    awayTeam: 'Athletic Club',
-    homeScore: 0,
-    awayScore: 0,
-    date: '2025-01-28',
-    venue: 'City Arena',
-    leagueName: 'Premier League',
-    referee: 'Maria Perera',
-    attendance: 8200,
-    halfTimeScore: '0-0',
-    goals: [],
-    cards: [
-      { minute: 34, player: 'F. Davis', team: 'home', type: 'yellow' },
-      { minute: 56, player: 'G. Taylor', team: 'away', type: 'yellow' }
-    ]
-  },
-  {
-    id: '3',
-    homeTeam: 'Stars FC',
-    awayTeam: 'Dynamo FC',
-    homeScore: 3,
-    awayScore: 2,
-    date: '2025-01-25',
-    venue: 'Regional Ground',
-    leagueName: 'Division One',
-    referee: 'David Fernando',
-    attendance: 5400,
-    halfTimeScore: '2-1',
-    goals: [
-      { minute: 12, scorer: 'H. Martinez', team: 'home', type: 'open_play' },
-      { minute: 28, scorer: 'I. Garcia', team: 'away', type: 'free_kick' },
-      { minute: 41, scorer: 'J. Lopez', team: 'home', type: 'open_play' },
-      { minute: 65, scorer: 'K. Hernandez', team: 'away', type: 'open_play' },
-      { minute: 82, scorer: 'L. Rodriguez', team: 'home', type: 'penalty' }
-    ],
-    cards: []
-  },
-  {
-    id: '4',
-    homeTeam: 'United SC',
-    awayTeam: 'City FC',
-    homeScore: 1,
-    awayScore: 2,
-    date: '2025-01-20',
-    venue: 'National Stadium',
-    leagueName: 'Premier League',
-    referee: 'Sarah Gomes',
-    attendance: 11200,
-    halfTimeScore: '0-1',
-    goals: [
-      { minute: 19, scorer: 'M. Clark', team: 'away', type: 'open_play' },
-      { minute: 52, scorer: 'N. White', team: 'home', type: 'penalty' },
-      { minute: 76, scorer: 'O. Green', team: 'away', type: 'open_play' }
-    ],
-    cards: [{ minute: 88, player: 'P. Hall', team: 'home', type: 'red' }]
-  }
-]
-
-const ResultCardsData = [
-  { title: 'Total Matches', value: '48', avatarIcon: 'ri-calendar-check-line', avatarColor: 'primary', change: 'positive', changeNumber: '12', subTitle: 'Completed' },
-  { title: 'Home Wins', value: '22', avatarIcon: 'ri-home-heart-line', avatarColor: 'success', change: 'positive', changeNumber: '46%', subTitle: 'Home victories' },
-  { title: 'Draws', value: '10', avatarIcon: 'ri-equal-line', avatarColor: 'info', change: 'neutral', changeNumber: '21%', subTitle: 'Draws' },
-  { title: 'Away Wins', value: '16', avatarIcon: 'ri-roadster-line', avatarColor: 'secondary', change: 'positive', changeNumber: '33%', subTitle: 'Away victories' }
-]
-
 const columnHelper = createColumnHelper()
 
 const MatchPastResults = () => {
-  const [data, setData] = useState(RESULTS_DATA)
+  const [rawResults, setRawResults] = useState([])
+  const [scheduledMatches, setScheduledMatches] = useState([])
+  const [clubs, setClubs] = useState([])
+  const [leagues, setLeagues] = useState([])
+  const [referees, setReferees] = useState([])
+  const [loading, setLoading] = useState(true)
   const [globalFilter, setGlobalFilter] = useState('')
   const [detailDrawerOpen, setDetailDrawerOpen] = useState(false)
   const [addResultDrawerOpen, setAddResultDrawerOpen] = useState(false)
   const [selectedMatch, setSelectedMatch] = useState(null)
   const isMobile = useMediaQuery(theme => theme.breakpoints.down('md'))
 
-  const handleAddResult = newResult => {
-    const id = String(Math.max(0, ...data.map(r => parseInt(r.id, 10))) + 1)
-    setData(prev => [{ ...newResult, id }, ...prev])
+  const fetchResults = useCallback(async () => {
+    try {
+      const res = await fetch('/api/matches?status=played')
+      const list = await res.json().catch(() => [])
+      setRawResults(Array.isArray(list) ? list : [])
+    } catch {
+      setRawResults([])
+    }
+  }, [])
+
+  const fetchScheduled = useCallback(async () => {
+    try {
+      const res = await fetch('/api/matches?status=scheduled')
+      const list = await res.json().catch(() => [])
+      setScheduledMatches(Array.isArray(list) ? list : [])
+    } catch {
+      setScheduledMatches([])
+    }
+  }, [])
+
+  const fetchClubs = useCallback(async () => {
+    try {
+      const res = await fetch('/api/clubs')
+      const list = await res.json().catch(() => [])
+      setClubs(Array.isArray(list) ? list : [])
+    } catch {
+      setClubs([])
+    }
+  }, [])
+
+  const fetchLeagues = useCallback(async () => {
+    try {
+      const res = await fetch('/api/leagues')
+      const list = await res.json().catch(() => [])
+      setLeagues(Array.isArray(list) ? list : [])
+    } catch {
+      setLeagues([])
+    }
+  }, [])
+
+  const fetchReferees = useCallback(async () => {
+    try {
+      const res = await fetch('/api/referees')
+      const list = await res.json().catch(() => [])
+      setReferees(Array.isArray(list) ? list : [])
+    } catch {
+      setReferees([])
+    }
+  }, [])
+
+  useEffect(() => {
+    setLoading(true)
+    Promise.all([fetchResults(), fetchScheduled(), fetchClubs(), fetchLeagues(), fetchReferees()]).finally(() => setLoading(false))
+  }, [fetchResults, fetchScheduled, fetchClubs, fetchLeagues, fetchReferees])
+
+  const clubMap = useMemo(() => {
+    const m = {}
+    clubs.forEach(c => { m[c.id] = c.clubName || c.name || '-' })
+    return m
+  }, [clubs])
+
+  const leagueMap = useMemo(() => {
+    const m = {}
+    leagues.forEach(l => { m[l.id] = l.name || '-' })
+    return m
+  }, [leagues])
+
+  const getRefereeName = id => referees.find(r => r.id === id)?.fullName || '-'
+
+  const data = useMemo(() => {
+    return rawResults.map(m => ({
+      id: m.id,
+      homeTeam: clubMap[m.homeClubId] || '-',
+      awayTeam: clubMap[m.awayClubId] || '-',
+      homeScore: m.homeScore ?? 0,
+      awayScore: m.awayScore ?? 0,
+      date: m.matchDate || m.date || '',
+      venue: m.venue || '-',
+      leagueName: leagueMap[m.leagueId] || '-',
+      referee: getRefereeName(m.referees?.mainReferee || m.refereeId),
+      attendance: m.attendance,
+      halfTimeScore: m.halfTimeScore || '',
+      goals: m.goals || [],
+      cards: m.cards || []
+    }))
+  }, [rawResults, clubMap, leagueMap, referees])
+
+  const resultCardsData = useMemo(() => {
+    const total = data.length
+    const homeWins = data.filter(m => m.homeScore > m.awayScore).length
+    const draws = data.filter(m => m.homeScore === m.awayScore).length
+    const awayWins = data.filter(m => m.awayScore > m.homeScore).length
+    const homePct = total ? Math.round((homeWins / total) * 100) : 0
+    const drawPct = total ? Math.round((draws / total) * 100) : 0
+    const awayPct = total ? Math.round((awayWins / total) * 100) : 0
+    return [
+      { title: 'Total Matches', value: String(total), avatarIcon: 'ri-calendar-check-line', avatarColor: 'primary', change: 'neutral', changeNumber: '', subTitle: 'Completed' },
+      { title: 'Home Wins', value: String(homeWins), avatarIcon: 'ri-home-heart-line', avatarColor: 'success', change: 'positive', changeNumber: `${homePct}%`, subTitle: 'Home victories' },
+      { title: 'Draws', value: String(draws), avatarIcon: 'ri-equal-line', avatarColor: 'info', change: 'neutral', changeNumber: `${drawPct}%`, subTitle: 'Draws' },
+      { title: 'Away Wins', value: String(awayWins), avatarIcon: 'ri-roadster-line', avatarColor: 'secondary', change: 'positive', changeNumber: `${awayPct}%`, subTitle: 'Away victories' }
+    ]
+  }, [data])
+
+  const handleAddResult = useCallback(() => {
+    fetchResults()
     setAddResultDrawerOpen(false)
-  }
+  }, [fetchResults])
 
   const columns = useMemo(
     () => [
@@ -227,7 +244,7 @@ const MatchPastResults = () => {
         </div>
 
         <div className='grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4'>
-          {ResultCardsData.map((item, i) => (
+          {resultCardsData.map((item, i) => (
             <HorizontalWithSubtitle key={i} {...item} />
           ))}
         </div>
@@ -261,7 +278,11 @@ const MatchPastResults = () => {
             }}
           />
           <Divider />
-          {isMobile ? (
+          {loading ? (
+            <Box sx={{ p: 4, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+              <Typography color='text.secondary'>Loading results...</Typography>
+            </Box>
+          ) : isMobile ? (
             <div className='p-4 flex flex-col gap-4'>
               {table.getFilteredRowModel().rows.length === 0 ? (
                 <Typography color='text.secondary' className='text-center py-8'>No results found</Typography>
@@ -376,7 +397,15 @@ const MatchPastResults = () => {
         onClose={() => { setDetailDrawerOpen(false); setSelectedMatch(null) }}
         match={selectedMatch}
       />
-      <AddResultDialog open={addResultDrawerOpen} onClose={() => setAddResultDrawerOpen(false)} onSave={handleAddResult} />
+      <AddResultDialog
+        open={addResultDrawerOpen}
+        onClose={() => setAddResultDrawerOpen(false)}
+        onSave={handleAddResult}
+        scheduledMatches={scheduledMatches}
+        clubs={clubs}
+        leagues={leagues}
+        referees={referees}
+      />
     </>
   )
 }

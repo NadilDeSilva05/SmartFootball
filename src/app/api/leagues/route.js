@@ -28,7 +28,7 @@ export async function POST (request) {
     await ref.set({
       name: name.trim(),
       season: season ?? '',
-      status: status === 'inactive' ? 'inactive' : 'active',
+      status: status === 'inactive' ? 'inactive' : status === 'upcoming' ? 'upcoming' : status === 'completed' ? 'completed' : 'active',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     })

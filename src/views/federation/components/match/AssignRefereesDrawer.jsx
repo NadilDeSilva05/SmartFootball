@@ -12,13 +12,13 @@ import InputLabel from '@mui/material/InputLabel'
 import MenuItem from '@mui/material/MenuItem'
 import Select from '@mui/material/Select'
 import Typography from '@mui/material/Typography'
-import { REFEREE_ROLES, REFEREES_OPTIONS } from '@views/federation/constants'
+import { REFEREE_ROLES, LICENSE_LEVEL_OPTIONS } from '@views/federation/constants'
 
-export default function AssignRefereesDrawer ({ open, onClose, match, assignments, onSave }) {
+export default function AssignRefereesDrawer ({ open, onClose, match, onSave, referees = [] }) {
   const [formErrors, setFormErrors] = useState({})
   const [openSelects, setOpenSelects] = useState({})
 
-  const currentAssignment = match ? assignments[match.id] : null
+  const currentAssignment = match && match.referees && typeof match.referees === 'object' ? match.referees : {}
   const [formData, setFormData] = useState({
     mainReferee: '',
     assistant1: '',
@@ -29,14 +29,14 @@ export default function AssignRefereesDrawer ({ open, onClose, match, assignment
   useEffect(() => {
     if (match) {
       setFormData({
-        mainReferee: currentAssignment?.mainReferee || '',
-        assistant1: currentAssignment?.assistant1 || '',
-        assistant2: currentAssignment?.assistant2 || '',
-        fourthOfficial: currentAssignment?.fourthOfficial || ''
+        mainReferee: currentAssignment.mainReferee || '',
+        assistant1: currentAssignment.assistant1 || '',
+        assistant2: currentAssignment.assistant2 || '',
+        fourthOfficial: currentAssignment.fourthOfficial || ''
       })
       setFormErrors({})
     }
-  }, [match, currentAssignment?.mainReferee, currentAssignment?.assistant1, currentAssignment?.assistant2, currentAssignment?.fourthOfficial])
+  }, [match])
 
   const selectedIds = [formData.mainReferee, formData.assistant1, formData.assistant2, formData.fourthOfficial].filter(Boolean)
   const hasDuplicate = selectedIds.length !== new Set(selectedIds).size
@@ -101,9 +101,12 @@ export default function AssignRefereesDrawer ({ open, onClose, match, assignment
                 <MenuItem value=''>
                   <em>Select referee</em>
                 </MenuItem>
-                {REFEREES_OPTIONS.map(ref => (
-                  <MenuItem key={ref.id} value={ref.id}>{ref.fullName} ({ref.licenseLevelLabel})</MenuItem>
-                ))}
+                {referees.map(ref => {
+                  const licenseLabel = LICENSE_LEVEL_OPTIONS.find(o => o.id === ref.licenseLevel)?.label || ref.licenseLevel || ''
+                  return (
+                    <MenuItem key={ref.id} value={ref.id}>{ref.fullName}{licenseLabel ? ` (${licenseLabel})` : ''}</MenuItem>
+                  )
+                })}
               </Select>
               {formErrors[key] && <FormHelperText>{formErrors[key]}</FormHelperText>}
             </FormControl>

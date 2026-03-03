@@ -4,11 +4,27 @@ Base URL: `/api` (e.g. `GET /api/clubs`).
 
 ## Environment
 
-Copy `.env.local.example` to `.env.local` and set Firebase Admin credentials (see file).
+Copy `.env.local.example` to `.env.local` and set:
+
+- Firebase Admin credentials (for API routes)
+- `FEDERATION_ADMIN_SECRET_CODE` – security code required for federation admin registration
+- `NEXT_PUBLIC_FIREBASE_*` – Firebase client config (for login/auth)
+
+**Club logos:** Stored as base64 in Firestore (no Firebase Storage required). Keep images small (e.g. under ~500 KB) to stay within Firestore’s 1 MB document limit.
 
 ---
 
-## Endpoints
+## Auth Endpoints
+
+| Method | Path | Description |
+|--------|------|--------------|
+| POST | `/api/auth/register-federation-admin` | Register federation admin (body: email, password, fullName, **securityCode**) |
+| POST | `/api/auth/register` | Register other roles (body: email, password, fullName, role) |
+| GET | `/api/auth/me` | Get current user (requires `Authorization: Bearer <token>`) |
+
+---
+
+## Other Endpoints
 
 ### Clubs
 | Method | Path | Description |
@@ -37,6 +53,11 @@ Copy `.env.local.example` to `.env.local` and set Firebase Admin credentials (se
 | PUT | `/api/leagues/[id]` | Update |
 | DELETE | `/api/leagues/[id]` | Delete |
 
+### Standings (points table, top scorers)
+| Method | Path | Description |
+|--------|------|--------------|
+| GET | `/api/standings?leagueId=` | Standings computed from played matches. Returns `{ standings, topScorers }` |
+
 ### Matches
 | Method | Path | Description |
 |--------|------|--------------|
@@ -49,10 +70,10 @@ Copy `.env.local.example` to `.env.local` and set Firebase Admin credentials (se
 ### Player requests (federation)
 | Method | Path | Description |
 |--------|------|--------------|
-| GET | `/api/player-requests` | List (`?status=pending|approved|rejected`) |
+| GET | `/api/player-requests` | List (`?status=pending|approved|rejected`, optional `?clubId=`) |
 | POST | `/api/player-requests` | Club submits request |
 | GET | `/api/player-requests/[id]` | Get one |
-| PATCH | `/api/player-requests/[id]` | Approve/reject (body: `{ status: "approved" \| "rejected" }`) |
+| PATCH | `/api/player-requests/[id]` | Approve/reject (body: `{ status: "approved" | "rejected", reason?: string }`) |
 
 ### Coach requests (federation)
 | Method | Path | Description |
@@ -106,3 +127,4 @@ Copy `.env.local.example` to `.env.local` and set Firebase Admin credentials (se
 Defined in `@/lib/firestore-collections.js`: `clubs`, `referees`, `leagues`, `matches`, `player_requests`, `coach_requests`, `club_players`, `club_coaches`, `match_sessions`, `match_registrations`, `live_metrics`.
 
 For real-time UI, use the Firebase **client** SDK and listen to `live_metrics` (e.g. where `matchId == currentMatch` and `status == 'live'`).
+

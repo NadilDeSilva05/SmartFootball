@@ -1,7 +1,8 @@
 'use client'
 
 // React Imports
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
+import { useSelector } from 'react-redux'
 
 // MUI Imports
 import Box from '@mui/material/Box'
@@ -16,6 +17,8 @@ import Chip from '@mui/material/Chip'
 import Tabs from '@mui/material/Tabs'
 import Tab from '@mui/material/Tab'
 import TablePagination from '@mui/material/TablePagination'
+import Alert from '@mui/material/Alert'
+import CircularProgress from '@mui/material/CircularProgress'
 import useMediaQuery from '@mui/material/useMediaQuery'
 
 // Third-party Imports
@@ -37,116 +40,46 @@ import ResultDetailDrawer from '@views/federation/components/match/ResultDetailD
 // Style Imports
 import tableStyles from '@core/styles/table.module.css'
 
-// Current club (can come from auth/context later)
-const MY_CLUB = 'City FC'
+const columnHelper = createColumnHelper()
 
-const RESULTS_DATA = [
-  {
-    id: '1',
-    homeTeam: 'City FC',
-    awayTeam: 'United SC',
-    homeScore: 2,
-    awayScore: 1,
-    date: '2025-02-01',
-    venue: 'National Stadium',
-    leagueName: 'Premier League',
-    referee: 'John Silva',
-    attendance: 12500,
-    halfTimeScore: '1-0',
-    goals: [
-      { minute: 23, scorer: 'A. Smith', team: 'home', type: 'open_play' },
-      { minute: 67, scorer: 'B. Jones', team: 'home', type: 'penalty' },
-      { minute: 89, scorer: 'C. Brown', team: 'away', type: 'open_play' }
-    ],
-    cards: [
-      { minute: 45, player: 'D. Lee', team: 'away', type: 'yellow' },
-      { minute: 78, player: 'E. Wilson', team: 'home', type: 'yellow' }
-    ]
-  },
-  {
-    id: '2',
-    homeTeam: 'Rovers FC',
-    awayTeam: 'Athletic Club',
-    homeScore: 0,
-    awayScore: 0,
-    date: '2025-01-28',
-    venue: 'City Arena',
-    leagueName: 'Premier League',
-    referee: 'Maria Perera',
-    attendance: 8200,
-    halfTimeScore: '0-0',
-    goals: [],
-    cards: [
-      { minute: 34, player: 'F. Davis', team: 'home', type: 'yellow' },
-      { minute: 56, player: 'G. Taylor', team: 'away', type: 'yellow' }
-    ]
-  },
-  {
-    id: '3',
-    homeTeam: 'Stars FC',
-    awayTeam: 'City FC',
-    homeScore: 1,
-    awayScore: 3,
-    date: '2025-01-25',
-    venue: 'Regional Ground',
-    leagueName: 'Division One',
-    referee: 'David Fernando',
-    attendance: 5400,
-    halfTimeScore: '2-1',
-    goals: [
-      { minute: 12, scorer: 'H. Martinez', team: 'home', type: 'open_play' },
-      { minute: 28, scorer: 'I. Garcia', team: 'away', type: 'free_kick' },
-      { minute: 41, scorer: 'J. Lopez', team: 'home', type: 'open_play' },
-      { minute: 65, scorer: 'K. Hernandez', team: 'away', type: 'open_play' }
-    ],
-    cards: []
-  },
-  {
-    id: '4',
-    homeTeam: 'United SC',
-    awayTeam: 'City FC',
-    homeScore: 1,
-    awayScore: 2,
-    date: '2025-01-20',
-    venue: 'National Stadium',
-    leagueName: 'Premier League',
-    referee: 'Sarah Gomes',
-    attendance: 11200,
-    halfTimeScore: '0-1',
-    goals: [
-      { minute: 19, scorer: 'M. Clark', team: 'away', type: 'open_play' },
-      { minute: 52, scorer: 'N. White', team: 'home', type: 'penalty' },
-      { minute: 76, scorer: 'O. Green', team: 'away', type: 'open_play' }
-    ],
-    cards: [{ minute: 88, player: 'P. Hall', team: 'home', type: 'red' }]
-  },
-  {
-    id: '5',
-    homeTeam: 'Stars FC',
-    awayTeam: 'Dynamo FC',
-    homeScore: 3,
-    awayScore: 2,
-    date: '2025-01-22',
-    venue: 'Regional Ground',
-    leagueName: 'Division One',
-    referee: 'David Fernando',
-    attendance: 5400,
-    halfTimeScore: '2-1',
-    goals: [
-      { minute: 12, scorer: 'H. Martinez', team: 'home', type: 'open_play' },
-      { minute: 82, scorer: 'L. Rodriguez', team: 'home', type: 'penalty' }
-    ],
-    cards: []
-  }
-]
+const resolveCurrentClub = (clubs, user) => {
+  if (!Array.isArray(clubs) || clubs.length === 0 || !user) return null
 
-const isMyClubMatch = (homeTeam, awayTeam) => homeTeam === MY_CLUB || awayTeam === MY_CLUB
+  const userClubIds = [user?.clubId, user?.clubDocId, user?.club?.id]
+    .map(value => String(value || '').trim())
+    .filter(Boolean)
+  const userUids = [user?.uid, user?.id, user?.userId, user?.adminUserId]
+    .map(value => String(value || '').trim())
+    .filter(Boolean)
+  const userEmails = [user?.email, user?.emailAddress, user?.adminEmail]
+    .map(value => String(value || '').trim().toLowerCase())
+    .filter(Boolean)
 
-function getStatsForData(data) {
+  const byUserClubId = userClubIds.length
+    ? clubs.find(club => {
+      const clubDocId = String(club?.id || '').trim()
+      const businessClubId = String(club?.clubId || '').trim()
+      return userClubIds.includes(clubDocId) || userClubIds.includes(businessClubId)
+    })
+    : null
+  if (byUserClubId) return byUserClubId
+
+  const byAdminUid = userUids.length
+    ? clubs.find(club => userUids.includes(String(club?.adminUserId || '').trim()))
+    : null
+  if (byAdminUid) return byAdminUid
+
+  return userEmails.length
+    ? clubs.find(club => userEmails.includes(String(club?.adminEmail || '').trim().toLowerCase())) || null
+    : null
+}
+
+const getStatsForData = data => {
   const total = data.length
-  const homeWins = data.filter(m => m.homeScore > m.awayScore).length
-  const draws = data.filter(m => m.homeScore === m.awayScore).length
-  const awayWins = data.filter(m => m.awayScore > m.homeScore).length
+  const homeWins = data.filter(match => match.homeScore > match.awayScore).length
+  const draws = data.filter(match => match.homeScore === match.awayScore).length
+  const awayWins = data.filter(match => match.awayScore > match.homeScore).length
+
   return [
     { title: 'Total Matches', value: String(total), avatarIcon: 'ri-calendar-check-line', avatarColor: 'primary', change: 'positive', changeNumber: '0', subTitle: 'Completed' },
     { title: 'Home Wins', value: String(homeWins), avatarIcon: 'ri-home-heart-line', avatarColor: 'success', change: 'positive', changeNumber: total ? `${Math.round((homeWins / total) * 100)}%` : '0%', subTitle: 'Home victories' },
@@ -155,20 +88,133 @@ function getStatsForData(data) {
   ]
 }
 
-const columnHelper = createColumnHelper()
-
 const ClubMatchPast = () => {
+  const user = useSelector(state => state?.authenticationReducer?.loginData?.user)
   const [tabValue, setTabValue] = useState(0)
   const [globalFilter, setGlobalFilter] = useState('')
   const [detailDrawerOpen, setDetailDrawerOpen] = useState(false)
   const [selectedMatch, setSelectedMatch] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [rawResults, setRawResults] = useState([])
+  const [clubs, setClubs] = useState([])
+  const [leagues, setLeagues] = useState([])
+  const [referees, setReferees] = useState([])
   const isMobile = useMediaQuery(theme => theme.breakpoints.down('md'))
 
+  useEffect(() => {
+    let active = true
+
+    const loadData = async () => {
+      try {
+        setLoading(true)
+        setError('')
+
+        const [matchesRes, clubsRes, leaguesRes, refereesRes] = await Promise.all([
+          fetch('/api/matches?status=played', { cache: 'no-store' }),
+          fetch('/api/clubs', { cache: 'no-store' }),
+          fetch('/api/leagues', { cache: 'no-store' }),
+          fetch('/api/referees', { cache: 'no-store' })
+        ])
+
+        if (!matchesRes.ok || !clubsRes.ok || !leaguesRes.ok || !refereesRes.ok) {
+          throw new Error('Failed to load match results data')
+        }
+
+        const [matchesPayload, clubsPayload, leaguesPayload, refereesPayload] = await Promise.all([
+          matchesRes.json().catch(() => []),
+          clubsRes.json().catch(() => []),
+          leaguesRes.json().catch(() => []),
+          refereesRes.json().catch(() => [])
+        ])
+
+        if (!active) return
+
+        setRawResults(Array.isArray(matchesPayload) ? matchesPayload : [])
+        setClubs(Array.isArray(clubsPayload) ? clubsPayload : [])
+        setLeagues(Array.isArray(leaguesPayload) ? leaguesPayload : [])
+        setReferees(Array.isArray(refereesPayload) ? refereesPayload : [])
+      } catch (e) {
+        if (!active) return
+        setError(e?.message || 'Unable to load past results')
+        setRawResults([])
+        setClubs([])
+        setLeagues([])
+        setReferees([])
+      } finally {
+        if (active) setLoading(false)
+      }
+    }
+
+    loadData()
+
+    return () => {
+      active = false
+    }
+  }, [])
+
+  const clubMap = useMemo(() => {
+    const map = {}
+    clubs.forEach(club => {
+      map[club.id] = club.clubName || club.name || '-'
+    })
+
+    return map
+  }, [clubs])
+
+  const leagueMap = useMemo(() => {
+    const map = {}
+    leagues.forEach(league => {
+      map[league.id] = league.name || '-'
+    })
+
+    return map
+  }, [leagues])
+
+  const refereeMap = useMemo(() => {
+    const map = {}
+    referees.forEach(referee => {
+      map[referee.id] = referee.fullName || '-'
+    })
+
+    return map
+  }, [referees])
+
+  const currentClub = useMemo(() => resolveCurrentClub(clubs, user), [clubs, user])
+  const currentClubId = currentClub?.id || null
+  const currentClubName = currentClub?.clubName || currentClub?.name || 'your club'
+
+  const data = useMemo(
+    () => rawResults.map(match => ({
+      id: match.id,
+      homeClubId: match.homeClubId || null,
+      awayClubId: match.awayClubId || null,
+      homeTeam: clubMap[match.homeClubId] || '-',
+      awayTeam: clubMap[match.awayClubId] || '-',
+      homeScore: Number(match.homeScore ?? 0),
+      awayScore: Number(match.awayScore ?? 0),
+      date: match.matchDate || match.date || '',
+      venue: match.venue || '-',
+      leagueName: leagueMap[match.leagueId] || '-',
+      referee: refereeMap[match?.referees?.mainReferee] || refereeMap[match?.refereeId] || '-',
+      attendance: match.attendance,
+      halfTimeScore: match.halfTimeScore || '',
+      goals: Array.isArray(match.goals) ? match.goals : [],
+      cards: Array.isArray(match.cards) ? match.cards : []
+    })),
+    [rawResults, clubMap, leagueMap, refereeMap]
+  )
+
   const filteredByTab = useMemo(() => {
+    const isMyClubMatch = match => {
+      if (!currentClubId) return false
+      return match.homeClubId === currentClubId || match.awayClubId === currentClubId
+    }
+
     return tabValue === 0
-      ? RESULTS_DATA.filter(m => isMyClubMatch(m.homeTeam, m.awayTeam))
-      : RESULTS_DATA.filter(m => !isMyClubMatch(m.homeTeam, m.awayTeam))
-  }, [tabValue])
+      ? data.filter(isMyClubMatch)
+      : data.filter(match => !isMyClubMatch(match))
+  }, [data, tabValue, currentClubId])
 
   const resultCardsData = useMemo(() => getStatsForData(filteredByTab), [filteredByTab])
 
@@ -186,7 +232,7 @@ const ClubMatchPast = () => {
             <Typography className='font-medium' color='text.primary'>
               {row.original.homeTeam} vs {row.original.awayTeam}
             </Typography>
-            <Typography variant='caption' color='text.secondary'>{row.original.venue} • {row.original.leagueName}</Typography>
+            <Typography variant='caption' color='text.secondary'>{row.original.venue} - {row.original.leagueName}</Typography>
           </Box>
         )
       }),
@@ -194,14 +240,15 @@ const ClubMatchPast = () => {
         id: 'score',
         header: 'Score',
         cell: ({ row }) => {
-          const m = row.original
-          const isDraw = m.homeScore === m.awayScore
-          const homeWon = m.homeScore > m.awayScore
+          const match = row.original
+          const isDraw = match.homeScore === match.awayScore
+          const homeWon = match.homeScore > match.awayScore
+
           return (
             <Chip
               variant='tonal'
               size='small'
-              label={`${m.homeScore} – ${m.awayScore}`}
+              label={`${match.homeScore} - ${match.awayScore}`}
               color={isDraw ? 'info' : homeWon ? 'success' : 'secondary'}
               sx={{ fontWeight: 600, minWidth: 64 }}
             />
@@ -252,11 +299,13 @@ const ClubMatchPast = () => {
             Past Match Results
           </Typography>
           <Typography variant='body1' color='text.secondary'>
-            View completed match results. Matches involving <strong>{MY_CLUB}</strong> are in My Club matches.
+            View completed match results. Matches involving <strong>{currentClubName}</strong> are in My Club matches.
           </Typography>
         </div>
 
-        <Tabs value={tabValue} onChange={(_, v) => setTabValue(v)} sx={{ borderBottom: 1, borderColor: 'divider' }}>
+        {error && <Alert severity='error'>{error}</Alert>}
+
+        <Tabs value={tabValue} onChange={(_, value) => setTabValue(value)} sx={{ borderBottom: 1, borderColor: 'divider' }}>
           <Tab label='My Club matches' />
           <Tab label='Other team matches' />
         </Tabs>
@@ -287,50 +336,59 @@ const ClubMatchPast = () => {
             }}
           />
           <Divider />
-          {isMobile ? (
+
+          {loading ? (
+            <Box sx={{ p: 4, display: 'flex', justifyContent: 'center' }}>
+              <CircularProgress size={22} />
+            </Box>
+          ) : isMobile ? (
             <div className='p-4 flex flex-col gap-4'>
               {table.getFilteredRowModel().rows.length === 0 ? (
                 <Typography color='text.secondary' className='text-center py-8'>No results found</Typography>
               ) : (
                 table.getRowModel().rows.map(row => {
-                  const m = row.original
-                  const isDraw = m.homeScore === m.awayScore
-                  const homeWon = m.homeScore > m.awayScore
+                  const match = row.original
+                  const isDraw = match.homeScore === match.awayScore
+                  const homeWon = match.homeScore > match.awayScore
+
                   return (
                     <Card
-                      key={m.id}
+                      key={match.id}
                       elevation={0}
                       variant='outlined'
                       sx={{ borderRadius: 2, transition: 'box-shadow 0.2s ease', '&:hover': { boxShadow: 1 } }}
                     >
                       <CardContent>
                         <Typography variant='caption' color='text.secondary' sx={{ display: 'block', mb: 1 }}>
-                          {m.date} • {m.leagueName}
+                          {match.date} - {match.leagueName}
                         </Typography>
                         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap', mb: 2 }}>
                           <Typography variant='body2' fontWeight={600} color='text.primary' sx={{ flex: '1 1 0', minWidth: 0 }}>
-                            {m.homeTeam}
+                            {match.homeTeam}
                           </Typography>
                           <Chip
                             variant='tonal'
                             size='small'
-                            label={`${m.homeScore} – ${m.awayScore}`}
+                            label={`${match.homeScore} - ${match.awayScore}`}
                             color={isDraw ? 'info' : homeWon ? 'success' : 'secondary'}
                             sx={{ fontWeight: 600, flexShrink: 0 }}
                           />
                           <Typography variant='body2' fontWeight={600} color='text.primary' sx={{ flex: '1 1 0', minWidth: 0, textAlign: 'right' }}>
-                            {m.awayTeam}
+                            {match.awayTeam}
                           </Typography>
                         </Box>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
                           <i className='ri-map-pin-line text-base text-textSecondary' />
-                          <Typography variant='body2' color='text.secondary'>{m.venue}</Typography>
+                          <Typography variant='body2' color='text.secondary'>{match.venue}</Typography>
                         </Box>
                         <Button
                           size='small'
                           variant='outlined'
                           fullWidth
-                          onClick={() => { setSelectedMatch(m); setDetailDrawerOpen(true) }}
+                          onClick={() => {
+                            setSelectedMatch(match)
+                            setDetailDrawerOpen(true)
+                          }}
                         >
                           View details
                         </Button>
@@ -381,6 +439,7 @@ const ClubMatchPast = () => {
               </table>
             </div>
           )}
+
           <TablePagination
             rowsPerPageOptions={[5, 10, 25]}
             component='div'
@@ -395,7 +454,10 @@ const ClubMatchPast = () => {
 
       <ResultDetailDrawer
         open={detailDrawerOpen}
-        onClose={() => { setDetailDrawerOpen(false); setSelectedMatch(null) }}
+        onClose={() => {
+          setDetailDrawerOpen(false)
+          setSelectedMatch(null)
+        }}
         match={selectedMatch}
       />
     </>

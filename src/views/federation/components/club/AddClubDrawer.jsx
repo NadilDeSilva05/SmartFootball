@@ -14,18 +14,28 @@ import MenuItem from '@mui/material/MenuItem'
 import Select from '@mui/material/Select'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
-import { LEAGUES_OPTIONS } from '@views/federation/constants'
+import CircularProgress from '@mui/material/CircularProgress'
+import Alert from '@mui/material/Alert'
 
-export default function AddClubDrawer ({ open, onClose }) {
+const fileToBase64 = file =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result)
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+
+export default function AddClubDrawer ({ open, onClose, onSuccess, leagues = [] }) {
   const [isPasswordShown, setIsPasswordShown] = useState(false)
   const [isConfirmPasswordShown, setIsConfirmPasswordShown] = useState(false)
   const [formErrors, setFormErrors] = useState({})
+  const [submitError, setSubmitError] = useState(null)
+  const [submitting, setSubmitting] = useState(false)
   const [leagueOpen, setLeagueOpen] = useState(false)
   const [statusOpen, setStatusOpen] = useState(false)
   const [logoPreview, setLogoPreview] = useState(null)
 
   const [formData, setFormData] = useState({
-    clubId: '',
     clubName: '',
     city: '',
     league: '',
@@ -42,9 +52,7 @@ export default function AddClubDrawer ({ open, onClose }) {
 
   const validateForm = () => {
     const errors = {}
-    if (!formData.clubId?.trim()) errors.clubId = 'Club ID is required'
     if (!formData.clubName?.trim()) errors.clubName = 'Club name is required'
-    if (!formData.league) errors.league = 'League is required'
     if (!formData.adminFullName?.trim()) errors.adminFullName = 'Admin full name is required'
     if (!formData.adminEmail?.trim()) errors.adminEmail = 'Admin email is required'
     else if (!/\S+@\S+\.\S+/.test(formData.adminEmail)) errors.adminEmail = 'Enter a valid email'
@@ -69,19 +77,71 @@ export default function AddClubDrawer ({ open, onClose }) {
     setLogoPreview(null)
   }
 
-  const handleSubmit = e => {
-    e.preventDefault()
-    if (!validateForm()) return
-    onClose()
+  const resetForm = () => {
+    setFormData({
+      clubName: '',
+      city: '',
+      league: '',
+      logo: null,
+      adminFullName: '',
+      adminEmail: '',
+      adminPassword: '',
+      adminConfirmPassword: '',
+      status: 'active'
+    })
     if (logoPreview) URL.revokeObjectURL(logoPreview)
-    setFormData({ clubId: '', clubName: '', city: '', league: '', logo: null, adminFullName: '', adminEmail: '', adminPassword: '', adminConfirmPassword: '', status: 'active' })
     setLogoPreview(null)
     setFormErrors({})
+    setSubmitError(null)
+  }
+
+  const handleSubmit = async e => {
+    e.preventDefault()
+    setSubmitError(null)
+    if (!validateForm()) return
+
+    setSubmitting(true)
+    try {
+      let logoValue = null
+      if (formData.logo) {
+        logoValue = await fileToBase64(formData.logo)
+      }
+
+      const res = await fetch('/api/clubs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clubName: formData.clubName.trim(),
+          city: formData.city?.trim() || '',
+          league: formData.league || '',
+          logo: logoValue,
+          adminFullName: formData.adminFullName?.trim() || '',
+          adminEmail: formData.adminEmail.trim(),
+          adminPassword: formData.adminPassword,
+          status: formData.status
+        })
+      })
+
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setSubmitError(data?.error || 'Failed to create club')
+        return
+      }
+
+      resetForm()
+      onClose()
+      onSuccess?.()
+    } catch (err) {
+      setSubmitError(err?.message || 'Failed to create club')
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const handleInputChange = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }))
     if (formErrors[field]) setFormErrors(prev => ({ ...prev, [field]: '' }))
+    if (submitError) setSubmitError(null)
   }
 
   const handleLeagueClose = () => setLeagueOpen(false)
@@ -100,15 +160,6 @@ export default function AddClubDrawer ({ open, onClose }) {
       <Divider />
       <div className='p-5 overflow-y-auto'>
         <form onSubmit={handleSubmit} className='flex flex-col gap-4'>
-          <TextField
-            fullWidth
-            size='small'
-            label='Club ID'
-            value={formData.clubId}
-            onChange={e => handleInputChange('clubId', e.target.value)}
-            error={!!formErrors.clubId}
-            helperText={formErrors.clubId}
-          />
           <TextField
             fullWidth
             size='small'
@@ -147,6 +198,7 @@ export default function AddClubDrawer ({ open, onClose }) {
                 <input type='file' accept='image/*' onChange={handleLogoChange} hidden />
               </Button>
             )}
+            <FormHelperText sx={{ mt: 0.5 }}>Keep under 500 KB to stay within limits</FormHelperText>
           </Box>
           <FormControl fullWidth size='small' error={!!formErrors.league}>
             <InputLabel id='add-club-league-label'>League</InputLabel>
@@ -163,7 +215,7 @@ export default function AddClubDrawer ({ open, onClose }) {
               <MenuItem value=''>
                 <em>Select league</em>
               </MenuItem>
-              {LEAGUES_OPTIONS.map(league => (
+              {leagues.map(league => (
                 <MenuItem key={league.id} value={league.id}>{league.name}</MenuItem>
               ))}
             </Select>
@@ -246,9 +298,16 @@ export default function AddClubDrawer ({ open, onClose }) {
               <MenuItem value='inactive'>Inactive</MenuItem>
             </Select>
           </FormControl>
+          {submitError && (
+            <Alert severity='error' onClose={() => setSubmitError(null)}>{submitError}</Alert>
+          )}
           <div className='flex gap-2 mt-2'>
-            <Button type='submit' variant='contained' size='small'>Submit</Button>
-            <Button type='button' variant='outlined' color='secondary' size='small' onClick={onClose}>Cancel</Button>
+            <Button type='submit' variant='contained' size='small' disabled={submitting} startIcon={submitting ? <CircularProgress size={18} /> : null}>
+              {submitting ? 'Submitting...' : 'Submit'}
+            </Button>
+            <Button type='button' variant='outlined' color='secondary' size='small' onClick={onClose} disabled={submitting}>
+              Cancel
+            </Button>
           </div>
         </form>
       </div>

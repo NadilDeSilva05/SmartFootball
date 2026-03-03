@@ -25,18 +25,58 @@ export async function PATCH (request, { params }) {
     const id = await Promise.resolve(params?.id)
     if (!id) return badRequest('id required')
     const body = await request.json()
-    const { status } = body
+    const { status, reason = '' } = body
     if (status !== 'approved' && status !== 'rejected') {
       return badRequest('status must be approved or rejected')
     }
+    if (status === 'rejected' && !reason.trim()) {
+      return badRequest('Rejection reason is required')
+    }
+
     const db = getFirestore()
-    const ref = db.collection(COLLECTIONS.coachRequests).doc(id)
-    const doc = await ref.get()
-    if (!doc.exists) return notFound('Request not found')
-    await ref.update({
+    const requestRef = db.collection(COLLECTIONS.coachRequests).doc(id)
+    const requestDoc = await requestRef.get()
+    if (!requestDoc.exists) return notFound('Request not found')
+
+    const requestData = requestDoc.data() || {}
+    if ((requestData.status || '') !== 'pending') {
+      return badRequest('Only pending requests can be reviewed')
+    }
+
+    const nowIso = new Date().toISOString()
+
+    if (status === 'approved') {
+      const duplicate = await db
+        .collection(COLLECTIONS.clubCoaches)
+        .where('clubId', '==', requestData.clubId)
+        .where('coachId', '==', requestData.coachId)
+        .get()
+
+      if (duplicate.empty) {
+        const coachRef = db.collection(COLLECTIONS.clubCoaches).doc()
+        await coachRef.set({
+          clubId: requestData.clubId,
+          coachId: requestData.coachId,
+          fullName: requestData.fullName || '',
+          email: requestData.email || '',
+          role: requestData.role || 'assistant_coach',
+          license: requestData.role === 'analyst' ? '' : (requestData.license || ''),
+          nicOrPassport: requestData.nicOrPassport || '',
+          dateOfBirth: requestData.dateOfBirth || '',
+          status: 'approved',
+          approvedFromRequestId: id,
+          createdAt: nowIso,
+          updatedAt: nowIso
+        })
+      }
+    }
+
+    await requestRef.update({
       status,
-      updatedAt: new Date().toISOString(),
-      ...(status === 'approved' ? { approvedAt: new Date().toISOString() } : {})
+      reviewReason: status === 'rejected' ? reason.trim() : '',
+      reviewedAt: nowIso,
+      updatedAt: nowIso,
+      ...(status === 'approved' ? { approvedAt: nowIso } : {})
     })
     return Response.json({ id, status })
   } catch (e) {

@@ -12,51 +12,91 @@ import MenuItem from '@mui/material/MenuItem'
 import Select from '@mui/material/Select'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
+import CircularProgress from '@mui/material/CircularProgress'
+import Alert from '@mui/material/Alert'
+import InputAdornment from '@mui/material/InputAdornment'
 import { LICENSE_LEVEL_OPTIONS } from '@views/federation/constants'
 
-export default function AddRefereeDrawer ({ open, onClose }) {
+export default function AddRefereeDrawer ({ open, onClose, onSuccess }) {
   const [formErrors, setFormErrors] = useState({})
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState(null)
+  const [isPasswordShown, setIsPasswordShown] = useState(false)
+  const [isConfirmPasswordShown, setIsConfirmPasswordShown] = useState(false)
   const [licenseLevelOpen, setLicenseLevelOpen] = useState(false)
   const [statusOpen, setStatusOpen] = useState(false)
 
   const [formData, setFormData] = useState({
-    refereeId: '',
     fullName: '',
     email: '',
     password: '',
     confirmPassword: '',
+    nicOrPassport: '',
     age: '',
     licenseLevel: 'district-regional',
     homeTown: '',
     status: 'active'
   })
 
+  const handleClickShowPassword = () => setIsPasswordShown(s => !s)
+  const handleClickShowConfirmPassword = () => setIsConfirmPasswordShown(s => !s)
+
   const validateForm = () => {
     const errors = {}
-    if (!formData.refereeId?.trim()) errors.refereeId = 'Referee ID is required'
     if (!formData.fullName?.trim()) errors.fullName = 'Full name is required'
     if (!formData.email?.trim()) errors.email = 'Email is required'
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) errors.email = 'Enter a valid email'
+    else if (!/\S+@\S+\.\S+/.test(formData.email)) errors.email = 'Enter a valid email'
     if (!formData.password) errors.password = 'Password is required'
     else if (formData.password.length < 6) errors.password = 'Password must be at least 6 characters'
     if (formData.password !== formData.confirmPassword) errors.confirmPassword = 'Passwords do not match'
-    if (!formData.age?.trim()) errors.age = 'Age is required'
-    else {
+    if (formData.age?.trim()) {
       const ageNum = parseInt(formData.age, 10)
       if (isNaN(ageNum) || ageNum < 18 || ageNum > 100) errors.age = 'Age must be between 18 and 100'
     }
     if (!formData.licenseLevel) errors.licenseLevel = 'License level is required'
-    if (!formData.homeTown?.trim()) errors.homeTown = 'Home town is required'
     setFormErrors(errors)
     return Object.keys(errors).length === 0
   }
 
-  const handleSubmit = e => {
+  const resetForm = () => {
+    setFormData({ fullName: '', email: '', password: '', confirmPassword: '', nicOrPassport: '', age: '', licenseLevel: 'district-regional', homeTown: '', status: 'active' })
+    setFormErrors({})
+    setSubmitError(null)
+  }
+
+  const handleSubmit = async e => {
     e.preventDefault()
     if (!validateForm()) return
-    onClose()
-    setFormData({ refereeId: '', fullName: '', email: '', password: '', confirmPassword: '', age: '', licenseLevel: 'district-regional', homeTown: '', status: 'active' })
-    setFormErrors({})
+    setSubmitting(true)
+    setSubmitError(null)
+    try {
+      const res = await fetch('/api/referees', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fullName: formData.fullName.trim(),
+          licenseLevel: formData.licenseLevel || '',
+          nicOrPassport: formData.nicOrPassport?.trim() || '',
+          email: formData.email.trim(),
+          password: formData.password,
+          age: formData.age?.trim() || '',
+          homeTown: formData.homeTown?.trim() || '',
+          status: formData.status
+        })
+      })
+      const result = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setSubmitError(result?.error || 'Failed to create referee')
+        return
+      }
+      resetForm()
+      onClose()
+      onSuccess?.()
+    } catch (err) {
+      setSubmitError(err?.message || 'Failed to create referee')
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const handleInputChange = (field, value) => {
@@ -83,15 +123,6 @@ export default function AddRefereeDrawer ({ open, onClose }) {
           <TextField
             fullWidth
             size='small'
-            label='Referee ID'
-            value={formData.refereeId}
-            onChange={e => handleInputChange('refereeId', e.target.value)}
-            error={!!formErrors.refereeId}
-            helperText={formErrors.refereeId}
-          />
-          <TextField
-            fullWidth
-            size='small'
             label='Full Name'
             value={formData.fullName}
             onChange={e => handleInputChange('fullName', e.target.value)}
@@ -112,21 +143,47 @@ export default function AddRefereeDrawer ({ open, onClose }) {
             fullWidth
             size='small'
             label='Password'
-            type='password'
+            type={isPasswordShown ? 'text' : 'password'}
             value={formData.password}
             onChange={e => handleInputChange('password', e.target.value)}
             error={!!formErrors.password}
             helperText={formErrors.password}
+            InputProps={{
+              endAdornment: (
+                <InputAdornment position='end'>
+                  <IconButton onClick={handleClickShowPassword} onMouseDown={e => e.preventDefault()} edge='end' size='small' aria-label='toggle password visibility'>
+                    <i className={isPasswordShown ? 'ri-eye-off-line' : 'ri-eye-line'} />
+                  </IconButton>
+                </InputAdornment>
+              )
+            }}
           />
           <TextField
             fullWidth
             size='small'
             label='Confirm Password'
-            type='password'
+            type={isConfirmPasswordShown ? 'text' : 'password'}
             value={formData.confirmPassword}
             onChange={e => handleInputChange('confirmPassword', e.target.value)}
             error={!!formErrors.confirmPassword}
             helperText={formErrors.confirmPassword}
+            InputProps={{
+              endAdornment: (
+                <InputAdornment position='end'>
+                  <IconButton onClick={handleClickShowConfirmPassword} onMouseDown={e => e.preventDefault()} edge='end' size='small' aria-label='toggle confirm password visibility'>
+                    <i className={isConfirmPasswordShown ? 'ri-eye-off-line' : 'ri-eye-line'} />
+                  </IconButton>
+                </InputAdornment>
+              )
+            }}
+          />
+          <TextField
+            fullWidth
+            size='small'
+            label='NIC / Passport'
+            value={formData.nicOrPassport}
+            onChange={e => handleInputChange('nicOrPassport', e.target.value)}
+            helperText='Optional'
           />
           <TextField
             fullWidth
@@ -137,7 +194,7 @@ export default function AddRefereeDrawer ({ open, onClose }) {
             value={formData.age}
             onChange={e => handleInputChange('age', e.target.value)}
             error={!!formErrors.age}
-            helperText={formErrors.age}
+            helperText={formErrors.age || 'Optional'}
           />
           <FormControl fullWidth size='small' error={!!formErrors.licenseLevel}>
             <InputLabel id='add-referee-license-label'>License Level</InputLabel>
@@ -166,8 +223,7 @@ export default function AddRefereeDrawer ({ open, onClose }) {
             label='Home Town'
             value={formData.homeTown}
             onChange={e => handleInputChange('homeTown', e.target.value)}
-            error={!!formErrors.homeTown}
-            helperText={formErrors.homeTown}
+            helperText='Optional'
           />
           <FormControl fullWidth size='small'>
             <InputLabel id='add-referee-status-label'>Status</InputLabel>
@@ -186,9 +242,12 @@ export default function AddRefereeDrawer ({ open, onClose }) {
               <MenuItem value='inactive'>Inactive</MenuItem>
             </Select>
           </FormControl>
+          {submitError && <Alert severity='error' onClose={() => setSubmitError(null)}>{submitError}</Alert>}
           <div className='flex gap-2 mt-2'>
-            <Button type='submit' variant='contained' size='small'>Submit</Button>
-            <Button type='button' variant='outlined' color='secondary' size='small' onClick={onClose}>Cancel</Button>
+            <Button type='submit' variant='contained' size='small' disabled={submitting} startIcon={submitting ? <CircularProgress size={18} /> : null}>
+              {submitting ? 'Creating...' : 'Submit'}
+            </Button>
+            <Button type='button' variant='outlined' color='secondary' size='small' onClick={onClose} disabled={submitting}>Cancel</Button>
           </div>
         </form>
       </div>

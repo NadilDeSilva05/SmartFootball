@@ -25,7 +25,6 @@ import * as Yup from 'yup'
 // Component Imports
 import Illustrations from '@components/Illustrations'
 import FormikTextField from '@components/common/formik/FormikTextField'
-import FormikSelectNew from '@components/common/formik/FormikSelectNew'
 
 // Config Imports
 import themeConfig from '@configs/themeConfig'
@@ -37,33 +36,18 @@ import { useImageVariant } from '@core/hooks/useImageVariant'
 import { requestSignIn, ROLE_REDIRECT_MAP } from '@/redux/slices/authenticationSlice'
 
 const Login = ({ mode }) => {
-  // States
   const [isPasswordShown, setIsPasswordShown] = useState(false)
 
-  // Vars - Football-themed illustrations
   const darkImg = '/images/pages/auth-v2-mask-dark.png'
   const lightImg = '/images/pages/auth-v2-mask-light.png'
   const footballIllustration = '/images/illustrations/football-player.svg'
 
-  // Hooks
   const router = useRouter()
   const searchParams = useSearchParams()
   const dispatch = useDispatch()
-
   const authBackground = useImageVariant(mode, lightImg, darkImg)
 
-  // Football platform roles
-  const roleOptions = [
-    { value: 'federation_admin', label: 'Federation Admin' },
-    { value: 'club_admin', label: 'Club Admin' },
-    { value: 'coach', label: 'Coach' },
-    { value: 'player', label: 'Player' },
-    { value: 'referee', label: 'Referee' }
-  ]
-
-  // Form validation schema
   const validationSchema = Yup.object().shape({
-    role: Yup.string().required('Role is required'),
     email: Yup.string().email('Must be a valid email').max(255).required('Email is required'),
     password: Yup.string().max(255).required('Password is required')
   })
@@ -73,54 +57,25 @@ const Login = ({ mode }) => {
   const handleSignIn = async (values, formikHelpers) => {
     const { setSubmitting, setErrors } = formikHelpers
 
-    const requestBody = {
-      emailAddress: values.email,
-      password: values.password,
-      role: values.role,
-      rememberMe: true
-    }
-
     const handleLoginFailCallback = error => {
       setSubmitting(false)
-      let errorMessage = 'Login failed'
-
-      try {
-        const responseData = error?.response?.data
-        if (responseData) {
-          errorMessage =
-            responseData.name ||
-            responseData.message ||
-            responseData.error ||
-            responseData.errorMessage ||
-            errorMessage
-        } else if (error?.message) {
-          errorMessage = error.message
-        }
-      } catch {
-        errorMessage = 'Login failed'
-      }
-
-      setErrors({ submit: errorMessage })
+      setErrors({ submit: error?.message || 'Login failed' })
     }
 
     try {
       const result = await dispatch(
         requestSignIn({
-          requestBody,
-          handleLoginFailCallback,
-          isReAuthentication: false
+          requestBody: { email: values.email, password: values.password, rememberMe: true },
+          handleLoginFailCallback
         })
       )
 
-      if (result.type === 'authentication/requestSignIn/rejected') {
-        return
-      }
+      if (result.type === 'authentication/requestSignIn/rejected') return
 
       if (result.payload?.token) {
-        const userRole = result.payload?.user?.role || values.role
+        const userRole = result.payload?.user?.role || result.payload?.user?.accountRole
         const redirectTo = searchParams.get('redirectTo')
         const targetUrl = redirectTo || ROLE_REDIRECT_MAP[userRole] || '/dashboard'
-
         await new Promise(resolve => setTimeout(resolve, 300))
         router.push(targetUrl)
       } else {
@@ -129,12 +84,7 @@ const Login = ({ mode }) => {
       }
     } catch (err) {
       setSubmitting(false)
-      setErrors({
-        submit:
-          err?.response?.data?.message ||
-          err?.message ||
-          'Login failed. Please try again.'
-      })
+      setErrors({ submit: err?.message || 'Login failed. Please try again.' })
     }
   }
 
@@ -182,12 +132,7 @@ const Login = ({ mode }) => {
           </div>
 
           <Formik
-            initialValues={{
-              role: 'player',
-              email: '',
-              password: '',
-              submit: null
-            }}
+            initialValues={{ email: '', password: '', submit: null }}
             enableReinitialize
             validationSchema={validationSchema}
             validateOnChange
@@ -195,14 +140,6 @@ const Login = ({ mode }) => {
           >
             {({ errors, handleSubmit, isSubmitting, touched, values }) => (
               <Form noValidate autoComplete='off' className='flex flex-col gap-5'>
-                <FormikSelectNew
-                  label='Role'
-                  name='role'
-                  options={roleOptions}
-                  value='value'
-                  selectLabel='label'
-                  required
-                />
                 <FormikTextField
                   label='Email'
                   name='email'

@@ -1,9 +1,7 @@
 'use client'
 
-// React Imports
-import { useState, useMemo, useEffect } from 'react'
-
-// MUI Imports
+import { useState, useMemo, useEffect, useCallback } from 'react'
+import { useSelector } from 'react-redux'
 import Card from '@mui/material/Card'
 import CardContent from '@mui/material/CardContent'
 import CardHeader from '@mui/material/CardHeader'
@@ -14,10 +12,10 @@ import Chip from '@mui/material/Chip'
 import IconButton from '@mui/material/IconButton'
 import TablePagination from '@mui/material/TablePagination'
 import Alert from '@mui/material/Alert'
+import TextField from '@mui/material/TextField'
 import Box from '@mui/material/Box'
+import CircularProgress from '@mui/material/CircularProgress'
 import useMediaQuery from '@mui/material/useMediaQuery'
-
-// Third-party Imports
 import classnames from 'classnames'
 import {
   createColumnHelper,
@@ -28,34 +26,58 @@ import {
   getPaginationRowModel,
   getSortedRowModel
 } from '@tanstack/react-table'
-
-// Component Imports
 import OptionMenu from '@core/components/option-menu'
 import HorizontalWithSubtitle from '@components/card-statistics/HorizontalWithSubtitle'
 import ConfirmationDialog from '@components/dialogs/confirmation-dialog'
 import AddCoachDrawer from '@views/club/components/coach/AddCoachDrawer'
 import EditCoachDrawer from '@views/club/components/coach/EditCoachDrawer'
-
-// Style Imports
 import tableStyles from '@core/styles/table.module.css'
-import { ROLE_OPTIONS } from '@views/club/constants'
-
-const COACHES_DATA = [
-  { id: '1', coachId: 'CH-001', fullName: 'James Wilson', role: 'head_coach', license: 'A', nicOrPassport: '198512345678', dateOfBirth: '1985-03-20', status: 'approved' },
-  { id: '2', coachId: 'CH-002', fullName: 'Anna Lopez', role: 'analyst', license: null, nicOrPassport: '199012345679', dateOfBirth: '1990-07-15', status: 'approved' },
-  { id: '3', coachId: 'CH-003', fullName: 'Michael Brown', role: 'assistant_coach', license: 'C', nicOrPassport: 'PASS-123456', dateOfBirth: '1988-11-08', status: 'pending' }
-]
-
-const CoachCardsData = [
-  { title: 'Total Coaches', value: '8', avatarIcon: 'ri-user-star-line', avatarColor: 'primary', change: 'positive', changeNumber: '2%', subTitle: 'Staff' },
-  { title: 'Approved', value: '6', avatarIcon: 'ri-checkbox-circle-line', avatarColor: 'success', change: 'positive', changeNumber: '1%', subTitle: 'Federation approved' },
-  { title: 'Pending', value: '2', avatarIcon: 'ri-time-line', avatarColor: 'warning', change: 'negative', changeNumber: '0%', subTitle: 'Awaiting approval' }
-]
+import { LICENSE_OPTIONS, ROLE_OPTIONS } from '@views/club/constants'
 
 const columnHelper = createColumnHelper()
 
+const resolveCurrentClub = (clubs, user) => {
+  if (!Array.isArray(clubs) || clubs.length === 0 || !user) return null
+
+  const userClubIds = [user?.clubId, user?.clubDocId, user?.club?.id]
+    .map(value => String(value || '').trim())
+    .filter(Boolean)
+  const userUids = [user?.uid, user?.id, user?.userId, user?.adminUserId]
+    .map(value => String(value || '').trim())
+    .filter(Boolean)
+  const userEmails = [user?.email, user?.emailAddress, user?.adminEmail]
+    .map(value => String(value || '').trim().toLowerCase())
+    .filter(Boolean)
+
+  const byUserClubId = userClubIds.length
+    ? clubs.find(club => {
+      const clubDocId = String(club?.id || '').trim()
+      const businessClubId = String(club?.clubId || '').trim()
+      return userClubIds.includes(clubDocId) || userClubIds.includes(businessClubId)
+    })
+    : null
+  if (byUserClubId) return byUserClubId
+
+  const byAdminUid = userUids.length
+    ? clubs.find(club => userUids.includes(String(club?.adminUserId || '').trim()))
+    : null
+  if (byAdminUid) return byAdminUid
+
+  return userEmails.length
+    ? clubs.find(club => userEmails.includes(String(club?.adminEmail || '').trim().toLowerCase())) || null
+    : null
+}
+
 const ClubCoachList = () => {
-  const [data] = useState(COACHES_DATA)
+  const user = useSelector(state => state?.authenticationReducer?.loginData?.user)
+  const token = useSelector(state => state?.authenticationReducer?.loginData?.token)
+
+  const [club, setClub] = useState(null)
+  const [coaches, setCoaches] = useState([])
+  const [requests, setRequests] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
   const [globalFilter, setGlobalFilter] = useState('')
   const [addDrawerOpen, setAddDrawerOpen] = useState(false)
   const [editDrawerOpen, setEditDrawerOpen] = useState(false)
@@ -65,63 +87,195 @@ const ClubCoachList = () => {
   const [requestSent, setRequestSent] = useState(false)
   const isMobile = useMediaQuery(theme => theme.breakpoints.down('md'))
 
+  const loadData = useCallback(async () => {
+    try {
+      setLoading(true)
+      setError('')
+
+      const clubsRes = await fetch('/api/clubs', { cache: 'no-store' })
+      if (!clubsRes.ok) throw new Error('Failed to load club details')
+      const clubsPayload = await clubsRes.json().catch(() => [])
+      const clubs = Array.isArray(clubsPayload) ? clubsPayload : []
+
+      let currentClub = resolveCurrentClub(clubs, user)
+
+      if (!currentClub?.id && token) {
+        const meRes = await fetch('/api/auth/me', {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: 'no-store'
+        })
+        if (meRes.ok) {
+          const me = await meRes.json().catch(() => ({}))
+          currentClub = resolveCurrentClub(clubs, me)
+        }
+      }
+
+      if (!currentClub?.id) {
+        setClub(null)
+        setCoaches([])
+        setRequests([])
+        setError('Could not resolve your club. Please login with a club admin account.')
+        return
+      }
+
+      setClub(currentClub)
+
+      const [coachesRes, requestsRes] = await Promise.all([
+        fetch(`/api/club-coaches?clubId=${encodeURIComponent(currentClub.id)}`, { cache: 'no-store' }),
+        fetch(`/api/coach-requests?clubId=${encodeURIComponent(currentClub.id)}`, { cache: 'no-store' })
+      ])
+
+      if (!coachesRes.ok || !requestsRes.ok) {
+        throw new Error('Failed to load coach management data')
+      }
+
+      const [coachesPayload, requestsPayload] = await Promise.all([
+        coachesRes.json().catch(() => []),
+        requestsRes.json().catch(() => [])
+      ])
+
+      setCoaches(Array.isArray(coachesPayload) ? coachesPayload : [])
+      setRequests(Array.isArray(requestsPayload) ? requestsPayload : [])
+    } catch (e) {
+      setError(e?.message || 'Failed to load coaches')
+      setCoaches([])
+      setRequests([])
+    } finally {
+      setLoading(false)
+    }
+  }, [user, token])
+
+  useEffect(() => {
+    loadData()
+  }, [loadData])
+
+  const mergedRows = useMemo(() => {
+    const approvedCoaches = coaches.map(coach => ({
+      ...coach,
+      source: 'coach',
+      status: coach.status || 'approved',
+      requestReason: ''
+    }))
+
+    const pendingOrRejected = requests
+      .filter(request => request.status === 'pending' || request.status === 'rejected')
+      .map(request => ({
+        id: request.id,
+        coachId: request.coachId,
+        fullName: request.fullName,
+        email: request.email || '',
+        role: request.role || 'assistant_coach',
+        license: request.license || '',
+        nicOrPassport: request.nicOrPassport || '',
+        dateOfBirth: request.dateOfBirth || '',
+        status: request.status,
+        requestReason: request.reviewReason || '',
+        createdAt: request.createdAt || '',
+        source: 'request'
+      }))
+
+    return [...approvedCoaches, ...pendingOrRejected]
+  }, [coaches, requests])
+
+  const coachCardsData = useMemo(() => {
+    const approved = mergedRows.filter(row => row.status === 'approved').length
+    const pending = mergedRows.filter(row => row.status === 'pending').length
+    const rejected = mergedRows.filter(row => row.status === 'rejected').length
+
+    return [
+      { title: 'Total Coaches', value: String(mergedRows.length), avatarIcon: 'ri-user-star-line', avatarColor: 'primary', change: 'neutral', changeNumber: '0', subTitle: 'Approved + requests' },
+      { title: 'Approved', value: String(approved), avatarIcon: 'ri-checkbox-circle-line', avatarColor: 'success', change: 'neutral', changeNumber: '0', subTitle: 'Federation approved' },
+      { title: 'Pending', value: String(pending), avatarIcon: 'ri-time-line', avatarColor: 'warning', change: 'neutral', changeNumber: '0', subTitle: 'Awaiting review' },
+      { title: 'Rejected', value: String(rejected), avatarIcon: 'ri-close-circle-line', avatarColor: 'error', change: 'neutral', changeNumber: '0', subTitle: 'Needs correction' }
+    ]
+  }, [mergedRows])
+
   const columns = useMemo(
     () => [
       columnHelper.accessor('coachId', { header: 'Coach Id', cell: ({ row }) => <Typography variant='body2'>{row.original.coachId}</Typography> }),
       columnHelper.accessor('fullName', {
         header: 'Full Name',
         cell: ({ row }) => (
-          <Typography className='font-medium' color='text.primary'>
-            {row.original.fullName}
-          </Typography>
+          <Box>
+            <Typography className='font-medium' color='text.primary'>
+              {row.original.fullName}
+            </Typography>
+            {!!row.original.email && <Typography variant='caption' color='text.secondary'>{row.original.email}</Typography>}
+          </Box>
         )
       }),
       columnHelper.accessor('role', {
         header: 'Role',
-        cell: ({ row }) => (
-          <Typography variant='body2'>{ROLE_OPTIONS.find(o => o.value === row.original.role)?.label ?? row.original.role}</Typography>
-        )
+        cell: ({ row }) => <Typography variant='body2'>{ROLE_OPTIONS.find(o => o.value === row.original.role)?.label ?? row.original.role}</Typography>
       }),
       columnHelper.accessor('license', {
         header: 'License',
         cell: ({ row }) => {
-          const c = row.original
-          if (c.role === 'analyst') return <Typography variant='body2' color='text.secondary'>–</Typography>
-          return <Chip variant='tonal' size='small' label={LICENSE_OPTIONS.find(o => o.value === c.license)?.label ?? c.license ?? '–'} color='primary' />
+          const item = row.original
+          if (item.role === 'analyst') return <Typography variant='body2' color='text.secondary'>-</Typography>
+          return <Chip variant='tonal' size='small' label={LICENSE_OPTIONS.find(o => o.value === item.license)?.label ?? item.license ?? '-'} color='primary' />
         }
       }),
-      columnHelper.accessor('nicOrPassport', { header: 'NIC / Passport', cell: ({ row }) => <Typography variant='body2'>{row.original.nicOrPassport}</Typography> }),
-      columnHelper.accessor('dateOfBirth', { header: 'DOB', cell: ({ row }) => <Typography variant='body2'>{row.original.dateOfBirth}</Typography> }),
+      columnHelper.accessor('nicOrPassport', { header: 'NIC / Passport', cell: ({ row }) => <Typography variant='body2'>{row.original.nicOrPassport || '-'}</Typography> }),
+      columnHelper.accessor('dateOfBirth', { header: 'DOB', cell: ({ row }) => <Typography variant='body2'>{row.original.dateOfBirth || '-'}</Typography> }),
       columnHelper.accessor('status', {
         header: 'Status',
+        cell: ({ row }) => {
+          const status = row.original.status
+          const color = status === 'approved' ? 'success' : status === 'pending' ? 'warning' : 'error'
+          return <Chip variant='tonal' size='small' label={status} color={color} />
+        }
+      }),
+      columnHelper.accessor('requestReason', {
+        header: 'Review Notes',
         cell: ({ row }) => (
-          <Chip variant='tonal' size='small' label={row.original.status} color={row.original.status === 'approved' ? 'success' : 'warning'} />
+          <Typography variant='body2' color='text.secondary'>
+            {row.original.requestReason || '-'}
+          </Typography>
         )
       }),
       columnHelper.accessor('action', {
         header: 'Actions',
-        cell: ({ row }) => (
-          <div className='flex items-center gap-1'>
-            <IconButton size='small' onClick={() => { setSelectedCoach(row.original); setEditDrawerOpen(true) }}>
-              <i className='ri-edit-box-line text-[22px] text-textSecondary' />
-            </IconButton>
-            <OptionMenu
-              iconClassName='text-[22px] text-textSecondary'
-              options={[
-                {
-                  text: 'Edit',
-                  icon: 'ri-edit-box-line text-[22px]',
-                  menuItemProps: { className: 'flex items-center gap-2 text-textSecondary', onClick: () => { setSelectedCoach(row.original); setEditDrawerOpen(true) } }
-                },
-                {
-                  text: 'Delete',
-                  icon: 'ri-delete-bin-7-line text-[22px]',
-                  menuItemProps: { className: 'flex items-center gap-2 text-error', onClick: () => { setCoachToDelete(row.original); setDeleteDialogOpen(true) } }
-                }
-              ]}
-            />
-          </div>
-        ),
+        cell: ({ row }) => {
+          const item = row.original
+          const isApprovedRecord = item.source === 'coach' && item.status === 'approved'
+          if (!isApprovedRecord) return <Typography variant='caption' color='text.secondary'>No actions</Typography>
+
+          return (
+            <div className='flex items-center gap-1'>
+              <IconButton size='small' onClick={() => { setSelectedCoach(item); setEditDrawerOpen(true) }}>
+                <i className='ri-edit-box-line text-[22px] text-textSecondary' />
+              </IconButton>
+              <OptionMenu
+                iconClassName='text-[22px] text-textSecondary'
+                options={[
+                  {
+                    text: 'Edit',
+                    icon: 'ri-edit-box-line text-[22px]',
+                    menuItemProps: {
+                      className: 'flex items-center gap-2 text-textSecondary',
+                      onClick: () => {
+                        setSelectedCoach(item)
+                        setEditDrawerOpen(true)
+                      }
+                    }
+                  },
+                  {
+                    text: 'Delete',
+                    icon: 'ri-delete-bin-7-line text-[22px]',
+                    menuItemProps: {
+                      className: 'flex items-center gap-2 text-error',
+                      onClick: () => {
+                        setCoachToDelete(item)
+                        setDeleteDialogOpen(true)
+                      }
+                    }
+                  }
+                ]}
+              />
+            </div>
+          )
+        },
         enableSorting: false
       })
     ],
@@ -129,7 +283,7 @@ const ClubCoachList = () => {
   )
 
   const table = useReactTable({
-    data,
+    data: mergedRows,
     columns,
     state: { globalFilter },
     onGlobalFilterChange: setGlobalFilter,
@@ -140,6 +294,24 @@ const ClubCoachList = () => {
     initialState: { pagination: { pageSize: 10 } }
   })
 
+  const handleDeleteConfirm = async () => {
+    if (!coachToDelete?.id) return
+    try {
+      const res = await fetch(`/api/club-coaches/${coachToDelete.id}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}))
+        throw new Error(payload?.error || 'Failed to delete coach')
+      }
+      setDeleteDialogOpen(false)
+      setCoachToDelete(null)
+      loadData()
+    } catch (e) {
+      setDeleteDialogOpen(false)
+      setCoachToDelete(null)
+      setError(e?.message || 'Failed to delete coach')
+    }
+  }
+
   return (
     <>
       <div className='space-y-6'>
@@ -148,25 +320,27 @@ const ClubCoachList = () => {
             Coach Management
           </Typography>
           <Typography variant='body1' color='text.secondary'>
-            Add, edit, and manage coaches. New coaches are sent to federation admin for approval.
+            Create coach and analyst requests to federation, monitor approvals, and manage approved staff.
           </Typography>
         </div>
 
         {requestSent && (
           <Alert severity='success' onClose={() => setRequestSent(false)}>
-            Coach registration request sent to federation admin. You will be notified once reviewed.
+            Coach registration request sent to federation admin.
           </Alert>
         )}
 
-        <div className='grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'>
-          {CoachCardsData.map((item, i) => (
+        {error && <Alert severity='error'>{error}</Alert>}
+
+        <div className='grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4'>
+          {coachCardsData.map((item, i) => (
             <HorizontalWithSubtitle key={i} {...item} />
           ))}
         </div>
 
         <Card>
           <CardHeader
-            title='Coaches'
+            title={`Coaches${club?.clubName ? ` - ${club.clubName}` : ''}`}
             action={
               <Box
                 sx={{
@@ -175,7 +349,7 @@ const ClubCoachList = () => {
                   alignItems: { xs: 'stretch', sm: 'center' },
                   gap: 2,
                   width: { xs: '100%', sm: 'auto' },
-                  minWidth: { xs: 0, sm: 200 }
+                  minWidth: { xs: 0, sm: 220 }
                 }}
               >
                 <TextField
@@ -183,9 +357,9 @@ const ClubCoachList = () => {
                   placeholder='Search coaches...'
                   value={globalFilter ?? ''}
                   onChange={e => setGlobalFilter(e.target.value)}
-                  sx={{ minWidth: { xs: 0, sm: 200 }, flex: { xs: '1 1 auto', sm: '0 0 auto' } }}
+                  sx={{ minWidth: { xs: 0, sm: 220 }, flex: { xs: '1 1 auto', sm: '0 0 auto' } }}
                 />
-                <Button variant='contained' startIcon={<i className='ri-add-line' />} onClick={() => setAddDrawerOpen(true)} sx={{ flexShrink: 0 }}>
+                <Button variant='contained' startIcon={<i className='ri-add-line' />} onClick={() => setAddDrawerOpen(true)} sx={{ flexShrink: 0 }} disabled={!club?.id}>
                   Add Coach
                 </Button>
               </Box>
@@ -198,53 +372,67 @@ const ClubCoachList = () => {
             }}
           />
           <Divider />
-          {isMobile ? (
+
+          {loading ? (
+            <Box sx={{ p: 4, display: 'flex', justifyContent: 'center' }}>
+              <CircularProgress size={24} />
+            </Box>
+          ) : isMobile ? (
             <div className='p-4 flex flex-col gap-4'>
               {table.getFilteredRowModel().rows.length === 0 ? (
                 <Typography color='text.secondary' className='text-center py-8'>No coaches found</Typography>
               ) : (
                 table.getRowModel().rows.map(row => {
-                  const c = row.original
-                  const licenseLabel = LICENSE_OPTIONS.find(o => o.value === c.license)?.label ?? c.license
+                  const item = row.original
+                  const licenseLabel = LICENSE_OPTIONS.find(o => o.value === item.license)?.label ?? item.license
+                  const statusColor = item.status === 'approved' ? 'success' : item.status === 'pending' ? 'warning' : 'error'
                   return (
-                    <Card
-                      key={c.id}
-                      elevation={0}
-                      variant='outlined'
-                      sx={{ borderRadius: 2, transition: 'box-shadow 0.2s ease', '&:hover': { boxShadow: 1 } }}
-                    >
+                    <Card key={`${item.source}-${item.id}`} elevation={0} variant='outlined' sx={{ borderRadius: 2, transition: 'box-shadow 0.2s ease', '&:hover': { boxShadow: 1 } }}>
                       <CardContent>
                         <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 2, mb: 2 }}>
                           <Box>
                             <Typography variant='subtitle1' fontWeight={600} color='text.primary'>
-                              {c.fullName}
+                              {item.fullName}
                             </Typography>
                             <Typography variant='caption' color='text.secondary'>
-                              {c.coachId} • {ROLE_OPTIONS.find(o => o.value === c.role)?.label ?? c.role}
-                              {c.role !== 'analyst' && ` • License: ${licenseLabel}`}
+                              {item.coachId} - {ROLE_OPTIONS.find(o => o.value === item.role)?.label ?? item.role}
+                              {item.role !== 'analyst' && ` - License: ${licenseLabel || '-'}`}
                             </Typography>
                           </Box>
-                          <Chip variant='tonal' size='small' label={c.status} color={c.status === 'approved' ? 'success' : 'warning'} />
+                          <Chip variant='tonal' size='small' label={item.status} color={statusColor} />
                         </Box>
                         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                          {!!item.email && (
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <i className='ri-mail-line text-base text-textSecondary' />
+                              <Typography variant='body2' color='text.secondary'>{item.email}</Typography>
+                            </Box>
+                          )}
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                             <i className='ri-id-card-line text-base text-textSecondary' />
-                            <Typography variant='body2' color='text.secondary'>NIC/Passport: {c.nicOrPassport}</Typography>
+                            <Typography variant='body2' color='text.secondary'>NIC/Passport: {item.nicOrPassport || '-'}</Typography>
                           </Box>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <i className='ri-calendar-line text-base text-textSecondary' />
-                            <Typography variant='body2' color='text.secondary'>DOB: {c.dateOfBirth}</Typography>
-                          </Box>
+                          {item.requestReason && (
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <i className='ri-error-warning-line text-base text-textSecondary' />
+                              <Typography variant='body2' color='text.secondary'>Review: {item.requestReason}</Typography>
+                            </Box>
+                          )}
                         </Box>
-                        <Divider sx={{ my: 2 }} />
-                        <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
-                          <Button size='small' variant='outlined' startIcon={<i className='ri-edit-box-line' />} onClick={() => { setSelectedCoach(c); setEditDrawerOpen(true) }}>
-                            Edit
-                          </Button>
-                          <Button size='small' variant='outlined' color='error' startIcon={<i className='ri-delete-bin-7-line' />} onClick={() => { setCoachToDelete(c); setDeleteDialogOpen(true) }}>
-                            Delete
-                          </Button>
-                        </Box>
+
+                        {item.source === 'coach' && item.status === 'approved' && (
+                          <>
+                            <Divider sx={{ my: 2 }} />
+                            <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
+                              <Button size='small' variant='outlined' startIcon={<i className='ri-edit-box-line' />} onClick={() => { setSelectedCoach(item); setEditDrawerOpen(true) }}>
+                                Edit
+                              </Button>
+                              <Button size='small' variant='outlined' color='error' startIcon={<i className='ri-delete-bin-7-line' />} onClick={() => { setCoachToDelete(item); setDeleteDialogOpen(true) }}>
+                                Delete
+                              </Button>
+                            </Box>
+                          </>
+                        )}
                       </CardContent>
                     </Card>
                   )
@@ -260,7 +448,10 @@ const ClubCoachList = () => {
                       {headerGroup.headers.map(header => (
                         <th key={header.id}>
                           {header.isPlaceholder ? null : (
-                            <div className={classnames({ 'cursor-pointer select-none': header.column.getCanSort() })} onClick={header.column.getToggleSortingHandler()}>
+                            <div
+                              className={classnames({ 'cursor-pointer select-none': header.column.getCanSort() })}
+                              onClick={header.column.getToggleSortingHandler()}
+                            >
                               {flexRender(header.column.columnDef.header, header.getContext())}
                             </div>
                           )}
@@ -272,7 +463,9 @@ const ClubCoachList = () => {
                 <tbody>
                   {table.getFilteredRowModel().rows.length === 0 ? (
                     <tr>
-                      <td colSpan={columns.length} className='text-center'>No coaches found</td>
+                      <td colSpan={columns.length} className='text-center'>
+                        No coaches found
+                      </td>
                     </tr>
                   ) : (
                     table.getRowModel().rows.map(row => (
@@ -287,6 +480,7 @@ const ClubCoachList = () => {
               </table>
             </div>
           )}
+
           <TablePagination
             rowsPerPageOptions={[5, 10, 25]}
             component='div'
@@ -299,12 +493,32 @@ const ClubCoachList = () => {
         </Card>
       </div>
 
-      <AddCoachDrawer open={addDrawerOpen} onClose={() => setAddDrawerOpen(false)} onRequestSent={() => { setAddDrawerOpen(false); setRequestSent(true) }} />
-      <EditCoachDrawer open={editDrawerOpen} onClose={() => { setEditDrawerOpen(false); setSelectedCoach(null) }} coach={selectedCoach} />
+      <AddCoachDrawer
+        open={addDrawerOpen}
+        onClose={() => setAddDrawerOpen(false)}
+        clubId={club?.id || null}
+        onRequestSent={() => {
+          setAddDrawerOpen(false)
+          setRequestSent(true)
+          loadData()
+        }}
+      />
+      <EditCoachDrawer
+        open={editDrawerOpen}
+        onClose={() => {
+          setEditDrawerOpen(false)
+          setSelectedCoach(null)
+        }}
+        coach={selectedCoach}
+        onSaved={() => loadData()}
+      />
       <ConfirmationDialog
         open={deleteDialogOpen}
-        onClose={() => { setDeleteDialogOpen(false); setCoachToDelete(null) }}
-        onConfirm={() => { setDeleteDialogOpen(false); setCoachToDelete(null) }}
+        onClose={() => {
+          setDeleteDialogOpen(false)
+          setCoachToDelete(null)
+        }}
+        onConfirm={handleDeleteConfirm}
         title='Delete Coach'
         content={coachToDelete ? `Are you sure you want to remove "${coachToDelete.fullName}"?` : ''}
         confirmText='Delete'

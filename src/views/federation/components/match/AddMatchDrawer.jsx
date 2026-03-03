@@ -12,10 +12,13 @@ import MenuItem from '@mui/material/MenuItem'
 import Select from '@mui/material/Select'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
-import { LEAGUES_OPTIONS, TEAMS_OPTIONS } from '@views/federation/constants'
+import CircularProgress from '@mui/material/CircularProgress'
+import Alert from '@mui/material/Alert'
 
-export default function AddMatchDrawer ({ open, onClose }) {
+export default function AddMatchDrawer ({ open, onClose, onSuccess, leagues = [], clubs = [] }) {
   const [formErrors, setFormErrors] = useState({})
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState(null)
   const [leagueOpen, setLeagueOpen] = useState(false)
   const [homeTeamOpen, setHomeTeamOpen] = useState(false)
   const [awayTeamOpen, setAwayTeamOpen] = useState(false)
@@ -31,7 +34,6 @@ export default function AddMatchDrawer ({ open, onClose }) {
 
   const validateForm = () => {
     const errors = {}
-    if (!formData.league) errors.league = 'League is required'
     if (!formData.homeTeam) errors.homeTeam = 'Home team is required'
     if (!formData.awayTeam) errors.awayTeam = 'Away team is required'
     if (formData.homeTeam && formData.awayTeam && formData.homeTeam === formData.awayTeam) {
@@ -44,12 +46,38 @@ export default function AddMatchDrawer ({ open, onClose }) {
     return Object.keys(errors).length === 0
   }
 
-  const handleSubmit = e => {
+  const handleSubmit = async e => {
     e.preventDefault()
     if (!validateForm()) return
-    onClose()
-    setFormData({ league: '', homeTeam: '', awayTeam: '', venue: '', date: '', time: '' })
-    setFormErrors({})
+    setSubmitting(true)
+    setSubmitError(null)
+    try {
+      const res = await fetch('/api/matches', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          leagueId: formData.league || null,
+          homeClubId: formData.homeTeam,
+          awayClubId: formData.awayTeam,
+          matchDate: formData.date,
+          matchTime: formData.time,
+          venue: formData.venue.trim()
+        })
+      })
+      const result = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setSubmitError(result?.error || 'Failed to create match')
+        return
+      }
+      setFormData({ league: '', homeTeam: '', awayTeam: '', venue: '', date: '', time: '' })
+      setFormErrors({})
+      onClose()
+      onSuccess?.()
+    } catch (err) {
+      setSubmitError(err?.message || 'Failed to create match')
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const handleInputChange = (field, value) => {
@@ -68,7 +96,7 @@ export default function AddMatchDrawer ({ open, onClose }) {
       <Divider />
       <div className='p-5 overflow-y-auto'>
         <form onSubmit={handleSubmit} className='flex flex-col gap-4'>
-          <FormControl fullWidth size='small' error={!!formErrors.league}>
+          <FormControl fullWidth size='small'>
             <InputLabel id='add-match-league-label'>League</InputLabel>
             <Select
               labelId='add-match-league-label'
@@ -79,12 +107,11 @@ export default function AddMatchDrawer ({ open, onClose }) {
               label='League'
               onChange={e => handleInputChange('league', e.target.value)}
             >
-              <MenuItem value=''><em>Select league</em></MenuItem>
-              {LEAGUES_OPTIONS.map(league => (
+              <MenuItem value=''><em>Select league (optional)</em></MenuItem>
+              {leagues.map(league => (
                 <MenuItem key={league.id} value={league.id}>{league.name}</MenuItem>
               ))}
             </Select>
-            {formErrors.league && <FormHelperText>{formErrors.league}</FormHelperText>}
           </FormControl>
           <FormControl fullWidth size='small' error={!!formErrors.homeTeam}>
             <InputLabel id='add-match-home-label'>Home Team</InputLabel>
@@ -98,8 +125,8 @@ export default function AddMatchDrawer ({ open, onClose }) {
               onChange={e => handleInputChange('homeTeam', e.target.value)}
             >
               <MenuItem value=''><em>Select home team</em></MenuItem>
-              {TEAMS_OPTIONS.map(team => (
-                <MenuItem key={team.id} value={team.id}>{team.name}</MenuItem>
+              {clubs.map(club => (
+                <MenuItem key={club.id} value={club.id}>{club.clubName || club.name}</MenuItem>
               ))}
             </Select>
             {formErrors.homeTeam && <FormHelperText>{formErrors.homeTeam}</FormHelperText>}
@@ -116,8 +143,8 @@ export default function AddMatchDrawer ({ open, onClose }) {
               onChange={e => handleInputChange('awayTeam', e.target.value)}
             >
               <MenuItem value=''><em>Select away team</em></MenuItem>
-              {TEAMS_OPTIONS.map(team => (
-                <MenuItem key={team.id} value={team.id}>{team.name}</MenuItem>
+              {clubs.map(club => (
+                <MenuItem key={club.id} value={club.id}>{club.clubName || club.name}</MenuItem>
               ))}
             </Select>
             {formErrors.awayTeam && <FormHelperText>{formErrors.awayTeam}</FormHelperText>}
@@ -125,9 +152,12 @@ export default function AddMatchDrawer ({ open, onClose }) {
           <TextField fullWidth size='small' label='Venue' placeholder='e.g. National Stadium' value={formData.venue} onChange={e => handleInputChange('venue', e.target.value)} error={!!formErrors.venue} helperText={formErrors.venue} />
           <TextField fullWidth size='small' type='date' label='Date' value={formData.date} onChange={e => handleInputChange('date', e.target.value)} InputLabelProps={{ shrink: true }} error={!!formErrors.date} helperText={formErrors.date} />
           <TextField fullWidth size='small' type='time' label='Time' value={formData.time} onChange={e => handleInputChange('time', e.target.value)} InputLabelProps={{ shrink: true }} error={!!formErrors.time} helperText={formErrors.time} />
+          {submitError && <Alert severity='error' onClose={() => setSubmitError(null)}>{submitError}</Alert>}
           <div className='flex gap-2 mt-2'>
-            <Button type='submit' variant='contained' size='small'>Schedule Match</Button>
-            <Button type='button' variant='outlined' color='secondary' size='small' onClick={onClose}>Cancel</Button>
+            <Button type='submit' variant='contained' size='small' disabled={submitting} startIcon={submitting ? <CircularProgress size={18} /> : null}>
+              {submitting ? 'Scheduling...' : 'Schedule Match'}
+            </Button>
+            <Button type='button' variant='outlined' color='secondary' size='small' onClick={onClose} disabled={submitting}>Cancel</Button>
           </div>
         </form>
       </div>

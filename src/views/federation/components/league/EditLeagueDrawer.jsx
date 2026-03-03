@@ -7,24 +7,52 @@ import Drawer from '@mui/material/Drawer'
 import IconButton from '@mui/material/IconButton'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
+import CircularProgress from '@mui/material/CircularProgress'
+import Alert from '@mui/material/Alert'
 
-export default function EditLeagueDrawer ({ open, onClose, league }) {
-  const [formData, setFormData] = useState({ name: '', region: 'National', season: '', status: 'active' })
+export default function EditLeagueDrawer ({ open, onClose, league, onSuccess }) {
+  const [formData, setFormData] = useState({ name: '', season: '', status: 'active' })
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState(null)
 
   useEffect(() => {
     if (league) {
       setFormData({
-        name: league.name,
-        region: league.region,
-        season: league.season,
-        status: league.status
+        name: league.name || '',
+        season: league.season || '',
+        status: league.status || 'active'
       })
+      setSubmitError(null)
     }
   }, [league])
 
-  const handleSubmit = e => {
+  const handleSubmit = async e => {
     e.preventDefault()
-    onClose()
+    if (!league?.id || !formData.name?.trim()) return
+    setSubmitting(true)
+    setSubmitError(null)
+    try {
+      const res = await fetch(`/api/leagues/${league.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: formData.name.trim(),
+          season: formData.season || '',
+          status: formData.status
+        })
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setSubmitError(data?.error || 'Failed to update league')
+        return
+      }
+      onClose()
+      onSuccess?.()
+    } catch (err) {
+      setSubmitError(err?.message || 'Failed to update league')
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -54,18 +82,6 @@ export default function EditLeagueDrawer ({ open, onClose, league }) {
             />
             <TextField
               fullWidth
-              select
-              SelectProps={{ native: true }}
-              label='Region'
-              value={formData.region}
-              onChange={e => setFormData({ ...formData, region: e.target.value })}
-            >
-              <option value='National'>National</option>
-              <option value='Regional'>Regional</option>
-              <option value='District'>District</option>
-            </TextField>
-            <TextField
-              fullWidth
               label='Season'
               value={formData.season}
               onChange={e => setFormData({ ...formData, season: e.target.value })}
@@ -82,9 +98,12 @@ export default function EditLeagueDrawer ({ open, onClose, league }) {
               <option value='upcoming'>Upcoming</option>
               <option value='completed'>Completed</option>
             </TextField>
+            {submitError && <Alert severity='error' onClose={() => setSubmitError(null)}>{submitError}</Alert>}
             <div className='flex gap-2'>
-              <Button type='submit' variant='contained'>Save</Button>
-              <Button type='button' variant='outlined' color='secondary' onClick={onClose}>Cancel</Button>
+              <Button type='submit' variant='contained' disabled={submitting} startIcon={submitting ? <CircularProgress size={18} /> : null}>
+                {submitting ? 'Saving...' : 'Save'}
+              </Button>
+              <Button type='button' variant='outlined' color='secondary' onClick={onClose} disabled={submitting}>Cancel</Button>
             </div>
           </form>
         )}

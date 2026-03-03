@@ -1,7 +1,7 @@
 'use client'
 
 // React Imports
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 
 // MUI Imports
 import Box from '@mui/material/Box'
@@ -13,6 +13,7 @@ import Button from '@mui/material/Button'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import Chip from '@mui/material/Chip'
+import IconButton from '@mui/material/IconButton'
 import TablePagination from '@mui/material/TablePagination'
 import useMediaQuery from '@mui/material/useMediaQuery'
 
@@ -36,43 +37,109 @@ import AssignRefereesDrawer from '@views/federation/components/match/AssignRefer
 // Style Imports
 import tableStyles from '@core/styles/table.module.css'
 
-const MATCHES_DATA = [
-  { id: '1', homeTeamName: 'City FC', awayTeamName: 'United SC', date: '2025-02-15', time: '15:00', venue: 'National Stadium', leagueName: 'Premier League' },
-  { id: '2', homeTeamName: 'Rovers FC', awayTeamName: 'Athletic Club', date: '2025-02-16', time: '17:00', venue: 'City Arena', leagueName: 'Premier League' },
-  { id: '3', homeTeamName: 'Stars FC', awayTeamName: 'Dynamo FC', date: '2025-02-18', time: '14:00', venue: 'Regional Ground', leagueName: 'Division One' },
-  { id: '4', homeTeamName: 'City FC', awayTeamName: 'Rovers FC', date: '2025-02-20', time: '16:00', venue: 'National Stadium', leagueName: 'Premier League' }
-]
-
-const AssignCardsData = [
-  { title: 'Total Matches', value: '24', avatarIcon: 'ri-calendar-line', avatarColor: 'primary', change: 'positive', changeNumber: '5', subTitle: 'Scheduled matches' },
-  { title: 'Pending', value: '8', avatarIcon: 'ri-time-line', avatarColor: 'warning', change: 'negative', changeNumber: '2', subTitle: 'Awaiting referees' },
-  { title: 'Assigned', value: '16', avatarIcon: 'ri-checkbox-circle-line', avatarColor: 'success', change: 'positive', changeNumber: '5', subTitle: 'Referees assigned' }
-]
-
 const columnHelper = createColumnHelper()
 
 const MatchAssignReferees = () => {
-  const [matches] = useState(MATCHES_DATA)
-  const [assignments, setAssignments] = useState({
-    '1': { mainReferee: '1', assistant1: '2', assistant2: '3', fourthOfficial: '4' },
-    '2': { mainReferee: '2', assistant1: '1', assistant2: '4', fourthOfficial: '3' }
-  })
+  const [rawMatches, setRawMatches] = useState([])
+  const [clubs, setClubs] = useState([])
+  const [referees, setReferees] = useState([])
+  const [loading, setLoading] = useState(true)
   const [globalFilter, setGlobalFilter] = useState('')
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [selectedMatch, setSelectedMatch] = useState(null)
   const isMobile = useMediaQuery(theme => theme.breakpoints.down('md'))
 
-  const getRefereeName = id => REFEREES_OPTIONS.find(r => r.id === id)?.fullName || '-'
-  const isAssigned = matchId => !!assignments[matchId]?.mainReferee
+  const fetchReferees = useCallback(async () => {
+    try {
+      const res = await fetch('/api/referees')
+      const list = await res.json().catch(() => [])
+      setReferees(Array.isArray(list) ? list : [])
+    } catch {
+      setReferees([])
+    }
+  }, [])
 
-  const dataWithAssignments = useMemo(() => matches.map(m => ({
-    ...m,
-    mainRefereeName: getRefereeName(assignments[m.id]?.mainReferee),
-    assistant1Name: getRefereeName(assignments[m.id]?.assistant1),
-    assistant2Name: getRefereeName(assignments[m.id]?.assistant2),
-    fourthOfficialName: getRefereeName(assignments[m.id]?.fourthOfficial),
-    assigned: isAssigned(m.id)
-  })), [matches, assignments])
+  const fetchMatches = useCallback(async () => {
+    try {
+      const res = await fetch('/api/matches?status=scheduled')
+      const list = await res.json().catch(() => [])
+      setRawMatches(Array.isArray(list) ? list : [])
+    } catch {
+      setRawMatches([])
+    }
+  }, [])
+
+  const fetchClubs = useCallback(async () => {
+    try {
+      const res = await fetch('/api/clubs')
+      const list = await res.json().catch(() => [])
+      setClubs(Array.isArray(list) ? list : [])
+    } catch {
+      setClubs([])
+    }
+  }, [])
+
+
+  const clubMap = useMemo(() => {
+    const m = {}
+    clubs.forEach(c => { m[c.id] = c.clubName || c.name || '-' })
+    return m
+  }, [clubs])
+
+  const getRefereeName = id => referees.find(r => r.id === id)?.fullName || '-'
+  const getAssignment = m => (m.referees && typeof m.referees === 'object' ? m.referees : {}) || {}
+  const isAssigned = m => !!getAssignment(m)?.mainReferee
+
+  const [leagues, setLeagues] = useState([])
+
+  const fetchLeagues = useCallback(async () => {
+    try {
+      const res = await fetch('/api/leagues')
+      const list = await res.json().catch(() => [])
+      setLeagues(Array.isArray(list) ? list : [])
+    } catch {
+      setLeagues([])
+    }
+  }, [])
+
+  useEffect(() => {
+    setLoading(true)
+    Promise.all([fetchMatches(), fetchReferees(), fetchClubs(), fetchLeagues()]).finally(() => setLoading(false))
+  }, [fetchMatches, fetchReferees, fetchClubs, fetchLeagues])
+
+  const leagueMap = useMemo(() => {
+    const m = {}
+    leagues.forEach(l => { m[l.id] = l.name || '-' })
+    return m
+  }, [leagues])
+
+  const dataWithAssignments = useMemo(() => rawMatches.map(m => {
+    const a = getAssignment(m)
+    return {
+      ...m,
+      homeTeamName: clubMap[m.homeClubId] || '-',
+      awayTeamName: clubMap[m.awayClubId] || '-',
+      leagueName: leagueMap[m.leagueId] || '-',
+      date: m.matchDate || m.date || '',
+      time: m.matchTime || m.time || '',
+      mainRefereeName: getRefereeName(a.mainReferee),
+      assistant1Name: getRefereeName(a.assistant1),
+      assistant2Name: getRefereeName(a.assistant2),
+      fourthOfficialName: getRefereeName(a.fourthOfficial),
+      assigned: isAssigned(m)
+    }
+  }), [rawMatches, clubs, referees, clubMap, leagueMap])
+
+  const assignCardsData = useMemo(() => {
+    const total = rawMatches.length
+    const assigned = rawMatches.filter(isAssigned).length
+    const pending = total - assigned
+    return [
+      { title: 'Total Matches', value: String(total), avatarIcon: 'ri-calendar-line', avatarColor: 'primary', change: 'neutral', changeNumber: '', subTitle: 'Scheduled matches' },
+      { title: 'Pending', value: String(pending), avatarIcon: 'ri-time-line', avatarColor: 'warning', change: 'neutral', changeNumber: '', subTitle: 'Awaiting referees' },
+      { title: 'Assigned', value: String(assigned), avatarIcon: 'ri-checkbox-circle-line', avatarColor: 'success', change: 'neutral', changeNumber: '', subTitle: 'Referees assigned' }
+    ]
+  }, [rawMatches])
 
   const columns = useMemo(
     () => [
@@ -159,7 +226,7 @@ const MatchAssignReferees = () => {
         enableSorting: false
       })
     ],
-    [assignments]
+    []
   )
 
   const table = useReactTable({
@@ -174,19 +241,31 @@ const MatchAssignReferees = () => {
     initialState: { pagination: { pageSize: 10 } }
   })
 
-  const handleSaveAssignment = formData => {
-    if (!selectedMatch) return
-    setAssignments(prev => ({
-      ...prev,
-      [selectedMatch.id]: {
-        mainReferee: formData.mainReferee,
-        assistant1: formData.assistant1,
-        assistant2: formData.assistant2,
-        fourthOfficial: formData.fourthOfficial
+  const handleSaveAssignment = async formData => {
+    if (!selectedMatch?.id) return
+    try {
+      const res = await fetch(`/api/matches/${selectedMatch.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          referees: {
+            mainReferee: formData.mainReferee,
+            assistant1: formData.assistant1,
+            assistant2: formData.assistant2,
+            fourthOfficial: formData.fourthOfficial
+          }
+        })
+      })
+      if (res.ok) {
+        setRawMatches(prev => prev.map(m => m.id === selectedMatch.id
+          ? { ...m, referees: { mainReferee: formData.mainReferee, assistant1: formData.assistant1, assistant2: formData.assistant2, fourthOfficial: formData.fourthOfficial } }
+          : m))
+        setDrawerOpen(false)
+        setSelectedMatch(null)
       }
-    }))
-    setDrawerOpen(false)
-    setSelectedMatch(null)
+    } catch {
+      // ignore
+    }
   }
 
   return (
@@ -202,7 +281,7 @@ const MatchAssignReferees = () => {
         </div>
 
         <div className='grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'>
-          {AssignCardsData.map((item, i) => (
+          {assignCardsData.map((item, i) => (
             <HorizontalWithSubtitle key={i} {...item} />
           ))}
         </div>
@@ -367,8 +446,8 @@ const MatchAssignReferees = () => {
       <AssignRefereesDrawer
         open={drawerOpen}
         onClose={() => { setDrawerOpen(false); setSelectedMatch(null) }}
+        referees={referees}
         match={selectedMatch}
-        assignments={assignments}
         onSave={handleSaveAssignment}
       />
     </>
