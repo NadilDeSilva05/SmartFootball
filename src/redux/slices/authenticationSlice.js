@@ -15,9 +15,9 @@ export const ROLES = {
 export const ROLE_REDIRECT_MAP = {
   [ROLES.FEDERATION_ADMIN]: '/federation',
   [ROLES.CLUB_ADMIN]: '/club',
-  [ROLES.COACH]: '/coach',
+  [ROLES.COACH]: '/coach/live-dashboard',
   [ROLES.PLAYER]: '/player',
-  [ROLES.REFEREE]: '/referee'
+  [ROLES.REFEREE]: '/referee/qr-scanner'
 }
 
 const normalizeRole = role => {

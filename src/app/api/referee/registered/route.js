@@ -11,11 +11,13 @@ export async function GET (request) {
     const matchId = searchParams.get('matchId')
     if (!matchId) return badRequest('matchId query required')
     const db = getFirestore()
-    const snap = await db.collection(COLLECTIONS.matchRegistrations).where('matchId', '==', matchId).orderBy('scannedAt', 'desc').get()
-    const list = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+    const snap = await db.collection(COLLECTIONS.matchRegistrations).where('matchId', '==', matchId).get()
+    const list = (snap.docs || [])
+      .map(d => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => (b.scannedAt || '').localeCompare(a.scannedAt || ''))
     return Response.json(list)
   } catch (e) {
-    console.error(e)
-    return serverError(e.message)
+    console.error('Registered error:', e?.message ?? e)
+    return serverError(e?.message ?? 'Internal server error')
   }
 }

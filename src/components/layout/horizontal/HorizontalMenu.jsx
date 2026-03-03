@@ -154,17 +154,17 @@ const HorizontalMenu = ({ dictionary }) => {
         )}
         {isCoach && (
           <SubMenu label='Coach / Analyst' icon={<i className='ri-user-heart-line' />}>
-            <MenuItem href={`/${locale || defaultLocale}/coach`} icon={<i className='ri-dashboard-line' />}>
-              Dashboard
-            </MenuItem>
             <MenuItem href={`/${locale || defaultLocale}/coach/live-dashboard`} icon={<i className='ri-heart-pulse-line' />}>
-              Live Match Dashboard
+              Live Match
             </MenuItem>
             <MenuItem href={`/${locale || defaultLocale}/coach/substitutions`} icon={<i className='ri-repeat-line' />}>
               Substitution Recommendations
             </MenuItem>
             <MenuItem href={`/${locale || defaultLocale}/coach/injury-alerts`} icon={<i className='ri-alarm-warning-line' />}>
               Injury Risk Alerts
+            </MenuItem>
+            <MenuItem href={`/${locale || defaultLocale}/coach/performance-history`} icon={<i className='ri-bar-chart-line' />}>
+              Performance History
             </MenuItem>
           </SubMenu>
         )}
@@ -183,9 +183,6 @@ const HorizontalMenu = ({ dictionary }) => {
         )}
         {isReferee && (
           <SubMenu label='Referee' icon={<i className='ri-user-star-line' />}>
-            <MenuItem href={`/${locale || defaultLocale}/referee`} icon={<i className='ri-dashboard-line' />}>
-              Dashboard
-            </MenuItem>
             <MenuItem href={`/${locale || defaultLocale}/referee/qr-scanner`} icon={<i className='ri-qr-scan-2-line' />}>
               QR Scanner
             </MenuItem>
@@ -428,7 +425,7 @@ const HorizontalMenu = ({ dictionary }) => {
             {dictionary['navigation'].menuExamples}
           </MenuItem>
           <MenuItem
-            href='https://visioinnovation.com/contact'
+            href='#'
             suffix={<i className='ri-external-link-line text-xl' />}
             target='_blank'
             icon={<i className='ri-lifebuoy-line' />}
@@ -436,7 +433,7 @@ const HorizontalMenu = ({ dictionary }) => {
             {dictionary['navigation'].raiseSupport}
           </MenuItem>
           <MenuItem
-            href='https://visioinnovation.com'
+            href='#'
             suffix={<i className='ri-external-link-line text-xl' />}
             target='_blank'
             icon={<i className='ri-book-line' />}
@@ -450,7 +447,7 @@ const HorizontalMenu = ({ dictionary }) => {
             {dictionary['navigation'].itemWithBadge}
           </MenuItem>
           <MenuItem
-            href='https://visioinnovation.com'
+            href='#'
             target='_blank'
             suffix={<i className='ri-external-link-line text-xl' />}
             icon={<i className='ri-link' />}

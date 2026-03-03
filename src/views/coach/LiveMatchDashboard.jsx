@@ -1,9 +1,6 @@
 'use client'
 
-// React Imports
 import { useState, useEffect, useCallback } from 'react'
-
-// MUI Imports
 import Card from '@mui/material/Card'
 import CardHeader from '@mui/material/CardHeader'
 import CardContent from '@mui/material/CardContent'
@@ -17,19 +14,17 @@ import TableHead from '@mui/material/TableHead'
 import TableRow from '@mui/material/TableRow'
 import Button from '@mui/material/Button'
 import Alert from '@mui/material/Alert'
-
-// Component Imports
+import FormControl from '@mui/material/FormControl'
+import InputLabel from '@mui/material/InputLabel'
+import Select from '@mui/material/Select'
+import MenuItem from '@mui/material/MenuItem'
+import CircularProgress from '@mui/material/CircularProgress'
+import { ref, onValue, off } from 'firebase/database'
 import ConfirmationDialog from '@components/dialogs/confirmation-dialog'
-import { addCompletedSession, MATCH_DURATION_MINUTES, TICK_MS, FATIGUE_LEVELS, WORK_RATE_OPTIONS } from '@views/coach/liveMatchConstants'
+import { getRealtimeDbClient } from '@/lib/firebase-client'
+import { addCompletedSession, MATCH_DURATION_MINUTES } from '@views/coach/liveMatchConstants'
 
-// Simulated initial squad (would come from "referee scanned" players when match starts)
-const INITIAL_PLAYERS = [
-  { id: '1', playerId: 'PLR-001', name: 'John Silva', heartRate: 142, fatigueLevel: 'Medium', playerLoad: 8.2, sprintCount: 12, highIntensityDist: 420, workRate: 'High', status: 'live', injuryRisk: false },
-  { id: '2', playerId: 'PLR-002', name: 'Maria Perera', heartRate: 168, fatigueLevel: 'High', playerLoad: 9.5, sprintCount: 18, highIntensityDist: 580, workRate: 'Very High', status: 'live', injuryRisk: true },
-  { id: '3', playerId: 'PLR-003', name: 'David Fernando', heartRate: 125, fatigueLevel: 'Low', playerLoad: 6.1, sprintCount: 7, highIntensityDist: 280, workRate: 'Medium', status: 'live', injuryRisk: false },
-  { id: '4', playerId: 'PLR-004', name: 'James Wilson', heartRate: 155, fatigueLevel: 'High', playerLoad: 9.8, sprintCount: 15, highIntensityDist: 510, workRate: 'High', status: 'live', injuryRisk: true },
-  { id: '5', playerId: 'PLR-005', name: 'Anna Lopez', heartRate: 132, fatigueLevel: 'Low', playerLoad: 5.4, sprintCount: 5, highIntensityDist: 190, workRate: 'Medium', status: 'live', injuryRisk: false }
-]
+const safeRtdbKey = (s) => String(s ?? '').replace(/[.#$\[\]/]/g, '_')
 
 const getFatigueColor = level => {
   if (level === 'Low') return 'success'
@@ -43,96 +38,106 @@ const getFatigueBgColor = level => {
   return 'error.light'
 }
 
-// Small random delta to simulate live device updates
-const randomDelta = (value, range) => Math.max(0, value + (Math.random() * 2 - 1) * range)
-const pickNear = (arr, current) => {
-  const i = arr.indexOf(current)
-  if (i < 0) return arr[0]
-  const next = Math.random() > 0.7 ? (i + (Math.random() > 0.5 ? 1 : -1)) : i
-  return arr[Math.max(0, Math.min(next, arr.length - 1))]
-}
-
 const LiveMatchDashboard = () => {
-  const [players, setPlayers] = useState(INITIAL_PLAYERS.map(p => ({ ...p })))
-  const [matchStartTime] = useState(() => Date.now())
-  const [elapsedMinutes, setElapsedMinutes] = useState(0)
-  const [sessionEnded, setSessionEnded] = useState(false)
+  const [matches, setMatches] = useState([])
+  const [selectedMatchId, setSelectedMatchId] = useState('')
+  const [players, setPlayers] = useState([])
+  const [loadingMatches, setLoadingMatches] = useState(true)
   const [substituteDialog, setSubstituteDialog] = useState({ open: false, player: null })
-  const [matchInfo] = useState({ id: 'M1', name: 'City FC vs Rovers FC', startTime: '15:00' })
+  const [elapsedMinutes, setElapsedMinutes] = useState(0)
 
+  const selectedMatch = matches.find(m => m.id === selectedMatchId)
   const livePlayers = players.filter(p => p.status === 'live')
+  const isLive = livePlayers.length > 0
 
-  const tick = useCallback(() => {
-    setElapsedMinutes(prev => {
-      const next = Math.min(prev + 1, MATCH_DURATION_MINUTES)
-      return next
-    })
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/matches?status=scheduled')
+      .then(r => r.json())
+      .then(list => {
+        if (!cancelled) {
+          setMatches(Array.isArray(list) ? list : [])
+          if (list?.length && !selectedMatchId) setSelectedMatchId(list[0]?.id || '')
+        }
+      })
+      .catch(() => { if (!cancelled) setMatches([]) })
+      .finally(() => { if (!cancelled) setLoadingMatches(false) })
+    return () => { cancelled = true }
   }, [])
 
   useEffect(() => {
-    if (sessionEnded) return
-    const t = setInterval(tick, TICK_MS)
-    return () => clearInterval(t)
-  }, [sessionEnded, tick])
-
-  useEffect(() => {
-    if (sessionEnded || livePlayers.length === 0) return
-    const id = setInterval(() => {
-      setPlayers(prev => prev.map(p => {
-        if (p.status !== 'live') return p
-        const heartRate = Math.round(randomDelta(p.heartRate, 8))
-        const fatigueLevel = pickNear(FATIGUE_LEVELS, p.fatigueLevel)
-        const playerLoad = Math.round(randomDelta(p.playerLoad, 0.6) * 10) / 10
-        const sprintCount = p.sprintCount + (Math.random() > 0.6 ? 1 : 0)
-        const highIntensityDist = p.highIntensityDist + (Math.random() > 0.5 ? 10 : 0)
-        const workRate = pickNear(WORK_RATE_OPTIONS, p.workRate)
-        const injuryRisk = fatigueLevel === 'High' || heartRate >= 175
-        return {
-          ...p,
-          heartRate: Math.min(220, Math.max(60, heartRate)),
-          fatigueLevel,
-          playerLoad: Math.min(15, Math.max(0, playerLoad)),
-          sprintCount: Math.min(50, sprintCount),
-          highIntensityDist: Math.min(2000, highIntensityDist),
-          workRate,
-          injuryRisk
-        }
-      }))
-    }, 3000)
-    return () => clearInterval(id)
-  }, [sessionEnded, livePlayers.length])
-
-  useEffect(() => {
-    if (elapsedMinutes >= MATCH_DURATION_MINUTES && !sessionEnded) {
-      setSessionEnded(true)
-      livePlayers.forEach(p => {
-        addCompletedSession({
-          matchId: matchInfo.id,
-          matchName: matchInfo.name,
-          playerId: p.playerId,
-          playerName: p.name,
-          reason: 'full_time',
-          heartRate: p.heartRate,
-          fatigueLevel: p.fatigueLevel,
-          playerLoad: p.playerLoad,
-          sprintCount: p.sprintCount,
-          highIntensityDist: p.highIntensityDist,
-          workRate: p.workRate,
-          minutesPlayed: MATCH_DURATION_MINUTES
-        })
-      })
+    if (!selectedMatchId) {
+      setPlayers([])
+      return
     }
-  }, [elapsedMinutes, sessionEnded, matchInfo.id, matchInfo.name, livePlayers])
+    const mapPayload = (d, id) => ({
+      id: id || `${selectedMatchId}_${d.playerId}`,
+      playerId: d.playerId,
+      name: d.playerName || d.playerId || '–',
+      heartRate: Number(d.heartRate) || 0,
+      fatigueLevel: d.fatigueLevel || 'Low',
+      playerLoad: Number(d.playerLoad) || 0,
+      sprintCount: Number(d.sprintCount) || 0,
+      highIntensityDist: Number(d.highIntensityDist) || 0,
+      workRate: d.workRate || '–',
+      status: d.status === 'stopped' ? 'substituted' : 'live',
+      injuryRisk: Boolean(d.injuryRisk)
+    })
+
+    const rtdb = getRealtimeDbClient()
+    if (rtdb) {
+      const path = `live_metrics/${safeRtdbKey(selectedMatchId)}`
+      const r = ref(rtdb, path)
+      const handler = (snapshot) => {
+        const val = snapshot.val()
+        if (!val || typeof val !== 'object') {
+          setPlayers([])
+          return
+        }
+        const list = Object.entries(val).map(([playerKey, d]) => mapPayload(d, `${selectedMatchId}_${d.playerId || playerKey}`))
+        setPlayers(list)
+      }
+      onValue(r, handler)
+      return () => off(r)
+    }
+
+    let cancelled = false
+    const poll = () => {
+      if (cancelled) return
+      fetch(`/api/iot/live?matchId=${encodeURIComponent(selectedMatchId)}`)
+        .then(res => res.json())
+        .then(arr => {
+          if (cancelled) return
+          setPlayers(Array.isArray(arr) ? arr.map(d => mapPayload(d, d.id)) : [])
+        })
+        .catch(() => { if (!cancelled) setPlayers([]) })
+    }
+    poll()
+    const interval = setInterval(poll, 3000)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
+  }, [selectedMatchId])
+
+  useEffect(() => {
+    if (!selectedMatchId || players.length === 0) return
+    const t = setInterval(() => {
+      setElapsedMinutes(prev => Math.min(prev + 1, MATCH_DURATION_MINUTES))
+    }, 60000)
+    return () => clearInterval(t)
+  }, [selectedMatchId, players.length])
 
   const handleSubstituteClick = player => setSubstituteDialog({ open: true, player })
 
-  const handleSubstituteConfirm = () => {
+  const handleSubstituteConfirm = useCallback(async () => {
     const p = substituteDialog.player
-    if (!p) return
-    setPlayers(prev => prev.map(x => x.id === p.id ? { ...x, status: 'substituted' } : x))
-    addCompletedSession({
-      matchId: matchInfo.id,
-      matchName: matchInfo.name,
+    if (!p || !selectedMatchId) return
+    const sessionPayload = {
+      matchId: selectedMatchId,
+      matchName: selectedMatch?.matchDate && selectedMatch?.matchTime
+        ? `${selectedMatch.matchDate} ${selectedMatch.matchTime} – ${selectedMatch.homeClubName || selectedMatch.homeClubId || ''} vs ${selectedMatch.awayClubName || selectedMatch.awayClubId || ''}`
+        : selectedMatchId,
       playerId: p.playerId,
       playerName: p.name,
       reason: 'substitution',
@@ -143,11 +148,28 @@ const LiveMatchDashboard = () => {
       highIntensityDist: p.highIntensityDist,
       workRate: p.workRate,
       minutesPlayed: elapsedMinutes
-    })
+    }
+    try {
+      await fetch('/api/iot/ingest/stop', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ matchId: selectedMatchId, playerId: p.playerId })
+      })
+      await fetch('/api/sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(sessionPayload)
+      })
+      addCompletedSession(sessionPayload)
+    } catch (e) {
+      console.error(e)
+    }
     setSubstituteDialog({ open: false, player: null })
-  }
+  }, [substituteDialog.player, selectedMatchId, selectedMatch, elapsedMinutes])
 
-  const isLive = !sessionEnded && livePlayers.length > 0
+  const matchLabel = selectedMatch
+    ? `${selectedMatch.matchDate || ''} ${selectedMatch.matchTime || ''} – ${selectedMatch.homeClubName || selectedMatch.homeClubId || ''} vs ${selectedMatch.awayClubName || selectedMatch.awayClubId || ''}`
+    : 'Select match'
 
   return (
     <div className='space-y-6'>
@@ -157,103 +179,127 @@ const LiveMatchDashboard = () => {
             Live Match Dashboard
           </Typography>
           <Typography variant='body1' color='text.secondary'>
-            Real-time player metrics from IoT devices. Substitute a player to stop their device and save final stats to Performance History.
+            Real-time player metrics from connected IoT devices (ESP32 / energy management). Select a match to see live data. Substitute a player to stop their device stream.
           </Typography>
         </div>
         <Box className='flex items-center gap-2'>
           <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: isLive ? 'error.main' : 'text.disabled' }} />
           <Typography variant='body2' color='text.secondary'>
-            {isLive ? 'LIVE' : sessionEnded ? 'Session ended' : 'No active devices'}
+            {isLive ? 'LIVE' : 'No active devices'}
           </Typography>
-          <Chip size='small' label={isLive ? 'Live' : 'Ended'} color={isLive ? 'error' : 'default'} variant='tonal' icon={<i className={isLive ? 'ri-record-circle-line' : 'ri-stop-circle-line'} style={{ fontSize: 16 }} />} />
+          <Chip size='small' label={isLive ? 'Live' : 'No data'} color={isLive ? 'error' : 'default'} variant='tonal' icon={<i className={isLive ? 'ri-record-circle-line' : 'ri-stop-circle-line'} style={{ fontSize: 16 }} />} />
         </Box>
       </div>
 
       <Card>
         <CardHeader
-          title={matchInfo.name}
-          subheader={`Match started ${matchInfo.startTime} • Elapsed: ${elapsedMinutes}' / ${MATCH_DURATION_MINUTES}'`}
-          action={
-            <Typography variant='h5' fontWeight='bold' color='primary'>
-              {elapsedMinutes}' / {MATCH_DURATION_MINUTES}'
-            </Typography>
-          }
+          title='Select match'
+          subheader='Players with connected devices will appear below in real time.'
         />
         <CardContent>
-          {sessionEnded && (
-            <Alert severity='info' sx={{ mb: 2 }}>
-              Session ended (90 minutes). All final stats have been saved to Performance History for coach and players.
-            </Alert>
-          )}
-          <Table size='small'>
-            <TableHead>
-              <TableRow>
-                <TableCell>Player Name</TableCell>
-                <TableCell align='center'>Heart Rate</TableCell>
-                <TableCell align='center'>Fatigue Level</TableCell>
-                <TableCell align='center'>Player Load</TableCell>
-                <TableCell align='center'>Sprint Count</TableCell>
-                <TableCell align='center'>High-Intensity Dist. (m)</TableCell>
-                <TableCell align='center'>Work Rate</TableCell>
-                <TableCell align='center'>Status</TableCell>
-                <TableCell align='center'>Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {players.map(p => (
-                <TableRow
-                  key={p.id}
-                  hover
-                  sx={{
-                    ...(p.injuryRisk && p.status === 'live' ? { bgcolor: 'error.light', '&:hover': { bgcolor: 'error.light' } } : {})
-                  }}
-                >
-                  <TableCell>
-                    <Box className='flex items-center gap-1'>
-                      <Typography className='font-medium'>{p.name}</Typography>
-                      {p.injuryRisk && p.status === 'live' && (
-                        <Chip size='small' label='Injury risk' color='error' variant='outlined' />
-                      )}
-                    </Box>
-                  </TableCell>
-                  <TableCell align='center'>
-                    <Typography>{p.heartRate}</Typography>
-                    <Typography variant='caption' color='text.secondary'>bpm</Typography>
-                  </TableCell>
-                  <TableCell align='center'>
-                    <Chip
-                      size='small'
-                      label={p.fatigueLevel}
-                      color={getFatigueColor(p.fatigueLevel)}
-                      sx={{ bgcolor: getFatigueBgColor(p.fatigueLevel), fontWeight: 600 }}
-                    />
-                  </TableCell>
-                  <TableCell align='center'>{p.playerLoad.toFixed(1)}</TableCell>
-                  <TableCell align='center'>{p.sprintCount}</TableCell>
-                  <TableCell align='center'>{p.highIntensityDist}</TableCell>
-                  <TableCell align='center'>
-                    <Typography variant='body2'>{p.workRate}</Typography>
-                  </TableCell>
-                  <TableCell align='center'>
-                    {p.status === 'live' ? (
-                      <Chip size='small' label='Live' color='success' variant='tonal' icon={<i className='ri-record-circle-line' style={{ fontSize: 14 }} />} />
-                    ) : (
-                      <Chip size='small' label='Substituted' color='default' variant='tonal' />
-                    )}
-                  </TableCell>
-                  <TableCell align='center'>
-                    {p.status === 'live' && !sessionEnded ? (
-                      <Button size='small' variant='outlined' color='warning' onClick={() => handleSubstituteClick(p)}>
-                        Substitute
-                      </Button>
-                    ) : (
-                      <Typography variant='caption' color='text.secondary'>–</Typography>
-                    )}
-                  </TableCell>
-                </TableRow>
+          <FormControl fullWidth size='small' sx={{ maxWidth: 480 }}>
+            <InputLabel id='match-select-label'>Match</InputLabel>
+            <Select
+              labelId='match-select-label'
+              label='Match'
+              value={selectedMatchId}
+              onChange={e => setSelectedMatchId(e.target.value)}
+              disabled={loadingMatches}
+            >
+              {matches.map(m => (
+                <MenuItem key={m.id} value={m.id}>
+                  {m.matchDate} {m.matchTime} – {m.homeClubName || m.homeClubId} vs {m.awayClubName || m.awayClubId}
+                </MenuItem>
               ))}
-            </TableBody>
-          </Table>
+            </Select>
+          </FormControl>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader
+          title={selectedMatch ? matchLabel : 'Live metrics'}
+          subheader={selectedMatchId ? `Elapsed: ${elapsedMinutes}' · Data updates in real time from IoT devices` : 'Select a match above'}
+          action={selectedMatchId && (
+            <Typography variant='h6' fontWeight='bold' color='primary'>
+              {elapsedMinutes}' / {MATCH_DURATION_MINUTES}'
+            </Typography>
+          )}
+        />
+        <CardContent>
+          {!selectedMatchId ? (
+            <Typography color='text.secondary'>Select a match to view live player metrics from connected devices.</Typography>
+          ) : players.length === 0 ? (
+            <Typography color='text.secondary'>No players with connected devices for this match yet. Referee must scan player IDs and connect their IoT devices first.</Typography>
+          ) : (
+            <Table size='small'>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Player Name</TableCell>
+                  <TableCell align='center'>Heart Rate</TableCell>
+                  <TableCell align='center'>Fatigue Level</TableCell>
+                  <TableCell align='center'>Player Load</TableCell>
+                  <TableCell align='center'>Sprint Count</TableCell>
+                  <TableCell align='center'>High-Intensity Dist. (m)</TableCell>
+                  <TableCell align='center'>Work Rate</TableCell>
+                  <TableCell align='center'>Status</TableCell>
+                  <TableCell align='center'>Actions</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {players.map(p => (
+                  <TableRow
+                    key={p.id}
+                    hover
+                    sx={{
+                      ...(p.injuryRisk && p.status === 'live' ? { bgcolor: 'error.light', '&:hover': { bgcolor: 'error.light' } } : {})
+                    }}
+                  >
+                    <TableCell>
+                      <Box className='flex items-center gap-1'>
+                        <Typography className='font-medium'>{p.name}</Typography>
+                        {p.injuryRisk && p.status === 'live' && (
+                          <Chip size='small' label='Injury risk' color='error' variant='outlined' />
+                        )}
+                      </Box>
+                    </TableCell>
+                    <TableCell align='center'>
+                      <Typography>{p.heartRate}</Typography>
+                      <Typography variant='caption' color='text.secondary'>bpm</Typography>
+                    </TableCell>
+                    <TableCell align='center'>
+                      <Chip
+                        size='small'
+                        label={p.fatigueLevel}
+                        color={getFatigueColor(p.fatigueLevel)}
+                        sx={{ bgcolor: getFatigueBgColor(p.fatigueLevel), fontWeight: 600 }}
+                      />
+                    </TableCell>
+                    <TableCell align='center'>{Number(p.playerLoad).toFixed(1)}</TableCell>
+                    <TableCell align='center'>{p.sprintCount}</TableCell>
+                    <TableCell align='center'>{p.highIntensityDist}</TableCell>
+                    <TableCell align='center'><Typography variant='body2'>{p.workRate}</Typography></TableCell>
+                    <TableCell align='center'>
+                      {p.status === 'live' ? (
+                        <Chip size='small' label='Live' color='success' variant='tonal' icon={<i className='ri-record-circle-line' style={{ fontSize: 14 }} />} />
+                      ) : (
+                        <Chip size='small' label='Substituted' color='default' variant='tonal' />
+                      )}
+                    </TableCell>
+                    <TableCell align='center'>
+                      {p.status === 'live' ? (
+                        <Button size='small' variant='outlined' color='warning' onClick={() => handleSubstituteClick(p)}>
+                          Substitute
+                        </Button>
+                      ) : (
+                        <Typography variant='caption' color='text.secondary'>–</Typography>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
 
@@ -270,7 +316,7 @@ const LiveMatchDashboard = () => {
         onClose={() => setSubstituteDialog({ open: false, player: null })}
         onConfirm={handleSubstituteConfirm}
         title='Confirm substitution'
-        content={substituteDialog.player ? `Substitute ${substituteDialog.player.name}? Device will stop sending data and final stats will be saved to Performance History.` : ''}
+        content={substituteDialog.player ? `Substitute ${substituteDialog.player.name}? Device will stop sending data and final stats will be saved.` : ''}
         confirmText='Substitute'
         cancelText='Cancel'
         confirmColor='warning'

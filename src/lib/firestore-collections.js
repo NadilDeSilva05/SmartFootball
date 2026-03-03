@@ -13,5 +13,7 @@ export const COLLECTIONS = {
   clubCoaches: 'club_coaches',
   matchSessions: 'match_sessions',
   matchRegistrations: 'match_registrations',
-  liveMetrics: 'live_metrics'
+  liveMetrics: 'live_metrics',
+  iotDevices: 'iot_devices',
+  playerDeviceLinks: 'player_device_links'
 }
