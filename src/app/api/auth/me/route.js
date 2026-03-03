@@ -79,7 +79,8 @@ export async function GET (request) {
       fullName: profile.fullName || decoded.name || decoded.email?.split('@')[0] || '',
       role: effectiveRole,
       accountRole: effectiveRole,
-      clubId
+      clubId,
+      refereeId: profile.refereeId || decoded.refereeId || undefined
     })
   } catch (e) {
     console.error(e)

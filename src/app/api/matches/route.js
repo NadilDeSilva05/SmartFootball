@@ -11,6 +11,7 @@ export async function GET (request) {
     const { searchParams } = new URL(request.url)
     const leagueId = searchParams.get('leagueId')
     const status = searchParams.get('status')
+    const refereeId = searchParams.get('refereeId')
     const db = getFirestore()
     const col = db.collection(COLLECTIONS.matches)
     // Avoid Firestore composite index: fetch all when filtering, or use single orderBy when not
@@ -23,6 +24,14 @@ export async function GET (request) {
     })
     if (leagueId) list = list.filter(m => (m.leagueId || null) === leagueId)
     if (status) list = list.filter(m => (m.status || 'scheduled') === status)
+    if (refereeId) {
+      list = list.filter(m => {
+        const refs = m.referees
+        if (Array.isArray(refs)) return refs.includes(refereeId)
+        if (refs && typeof refs === 'object') return Object.values(refs).includes(refereeId)
+        return m.refereeId === refereeId
+      })
+    }
     // Sort in memory: matchDate desc, then matchTime asc (avoids composite index)
     list.sort((a, b) => {
       const da = (a.matchDate || '').toString()
@@ -30,6 +39,21 @@ export async function GET (request) {
       if (da !== dbVal) return dbVal.localeCompare(da) // desc
       return ((a.matchTime || '').toString()).localeCompare((b.matchTime || '').toString())
     })
+    // Resolve club names for display (homeClubName, awayClubName)
+    const clubIds = [...new Set(list.flatMap(m => [m.homeClubId, m.awayClubId]).filter(Boolean))]
+    const clubNames = {}
+    if (clubIds.length > 0) {
+      await Promise.all(clubIds.map(async (cid) => {
+        const doc = await db.collection(COLLECTIONS.clubs).doc(cid).get()
+        if (doc.exists) clubNames[cid] = doc.data()?.clubName || doc.data()?.name || cid
+        else clubNames[cid] = cid
+      }))
+    }
+    list = list.map(m => ({
+      ...m,
+      homeClubName: clubNames[m.homeClubId] ?? m.homeClubId ?? '',
+      awayClubName: clubNames[m.awayClubId] ?? m.awayClubId ?? ''
+    }))
     return Response.json(Array.isArray(list) ? list : [])
   } catch (e) {
     const msg = e?.message ?? String(e)

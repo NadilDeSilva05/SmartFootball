@@ -20,9 +20,28 @@ import { getCompletedSessions } from '@views/coach/liveMatchConstants'
 
 const CoachPerformanceHistory = () => {
   const [sessions, setSessions] = useState([])
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    setSessions(getCompletedSessions())
+    let cancelled = false
+    setLoading(true)
+    fetch('/api/sessions')
+      .then(r => r.json())
+      .then(arr => {
+        if (cancelled) return
+        const fromApi = Array.isArray(arr) ? arr.map(s => ({ ...s, id: s.id || `api-${s.matchId}-${s.playerId}-${s.endedAt}` })) : []
+        const fromMemory = getCompletedSessions()
+        const seen = new Set(fromApi.map(s => s.id))
+        const merged = [...fromApi]
+        fromMemory.forEach(s => {
+          if (!seen.has(s.id)) { merged.push(s); seen.add(s.id) }
+        })
+        merged.sort((a, b) => (b.endedAt || '').localeCompare(a.endedAt || ''))
+        setSessions(merged)
+      })
+      .catch(() => { if (!cancelled) setSessions(getCompletedSessions()) })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
   }, [])
 
   return (
@@ -42,7 +61,11 @@ const CoachPerformanceHistory = () => {
           subheader='Session results saved when a player was substituted or when the match reached 90 minutes.'
         />
         <CardContent>
-          {sessions.length === 0 ? (
+          {loading ? (
+            <Box sx={{ py: 4, textAlign: 'center', color: 'text.secondary' }}>
+              <Typography variant='body1'>Loading sessions…</Typography>
+            </Box>
+          ) : sessions.length === 0 ? (
             <Box sx={{ py: 4, textAlign: 'center', color: 'text.secondary' }}>
               <i className='ri-file-list-3-line' style={{ fontSize: 48, opacity: 0.5 }} />
               <Typography variant='body1' sx={{ mt: 1 }}>No session data yet.</Typography>

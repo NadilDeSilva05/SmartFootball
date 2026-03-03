@@ -3,9 +3,6 @@
 // React Imports
 import { useEffect, useState } from 'react'
 
-// Next Imports
-import Link from 'next/link'
-
 // Third-party Imports
 import classnames from 'classnames'
 
@@ -38,21 +35,8 @@ const FooterContent = () => {
     >
       <p>
         <span>{`© ${currentYear || '2024'}, Design and Developed by `}</span>
-
-        <Link href='https://visioinnovation.com' target='_blank' className='text-primary'>
-          Visio Innovation
-        </Link>
+        <span className='text-primary font-medium'>Nadil De Silva</span>
       </p>
-      {!isBreakpointReached && (
-        <div className='flex items-center gap-4'>
-          <Link href='https://visioinnovation.com' target='_blank' className='text-primary'>
-            Visio Innovation
-          </Link>
-          <Link href='https://visioinnovation.com/contact' target='_blank' className='text-primary'>
-            Contact
-          </Link>
-        </div>
-      )}
     </div>
   )
 }

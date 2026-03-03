@@ -67,9 +67,8 @@ const EditCard = ({ invoiceData, id, data }) => {
                       </Typography>
                     </div>
                     <div>
-                      <Typography color='text.primary'>Visio Innovation</Typography>
+                      <Typography color='text.primary'>Nadil De Silva</Typography>
                       <Typography color='text.primary'>Sri Lanka</Typography>
-                      <Typography color='text.primary'>contact@visioinnovation.com</Typography>
                     </div>
                   </div>
                   <div className='flex flex-col gap-2'>

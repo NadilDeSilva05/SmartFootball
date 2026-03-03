@@ -14,7 +14,10 @@ import ReduxProvider from '@/redux/provider'
 export const metadata = {
   title: 'Smart Football',
   description:
-    'Smart Football. A comprehensive football analytics platform. Manage your football analytics with ease, clarity, and control.'
+    'Smart Football. A comprehensive football analytics platform. Manage your football analytics with ease, clarity, and control.',
+  icons: {
+    icon: '/favicon.ico'
+  }
 }
 
 const RootLayout = ({ children }) => {

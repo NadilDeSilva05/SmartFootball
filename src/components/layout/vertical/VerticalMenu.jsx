@@ -137,11 +137,8 @@ const VerticalMenu = ({ scrollMenu }) => {
         )}
         {isCoach && (
           <MenuSection label='Coach / Analyst'>
-            <MenuItem href='/coach' icon={<i className='ri-dashboard-line' />}>
-              Dashboard
-            </MenuItem>
             <MenuItem href='/coach/live-dashboard' icon={<i className='ri-heart-pulse-line' />}>
-              Live Match Dashboard
+              Live Match
             </MenuItem>
             <MenuItem href='/coach/substitutions' icon={<i className='ri-repeat-line' />}>
               Substitution Recommendations
@@ -169,9 +166,6 @@ const VerticalMenu = ({ scrollMenu }) => {
         )}
         {isReferee && (
           <MenuSection label='Referee'>
-            <MenuItem href='/referee' icon={<i className='ri-dashboard-line' />}>
-              Dashboard
-            </MenuItem>
             <MenuItem href='/referee/qr-scanner' icon={<i className='ri-qr-scan-2-line' />}>
               QR Scanner
             </MenuItem>
@@ -368,7 +362,7 @@ const VerticalMenu = ({ scrollMenu }) => {
             Menu Examples
           </MenuItem>
           <MenuItem
-            href='https://visioinnovation.com/support'
+            href='#'
             icon={<i className='ri-lifebuoy-line' />}
             suffix={<i className='ri-external-link-line text-xl' />}
             target='_blank'
@@ -376,7 +370,7 @@ const VerticalMenu = ({ scrollMenu }) => {
             Raise Support
           </MenuItem>
           <MenuItem
-            href='https://visioinnovation.com'
+            href='#'
             icon={<i className='ri-book-line' />}
             suffix={<i className='ri-external-link-line text-xl' />}
             target='_blank'
@@ -386,7 +380,7 @@ const VerticalMenu = ({ scrollMenu }) => {
           <SubMenu label='Others' icon={<i className='ri-more-line' />}>
             <MenuItem icon={<i className='ri-circle-line' />}>Item with Badge</MenuItem>
             <MenuItem
-              href='https://visioinnovation.com'
+              href='#'
               icon={<i className='ri-circle-line' />}
               suffix={<i className='ri-external-link-line text-xl' />}
               target='_blank'

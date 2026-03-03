@@ -420,14 +420,14 @@ const verticalMenuData = (dictionary, params) => [
       {
         label: dictionary['navigation'].raiseSupport,
         icon: 'ri-lifebuoy-line',
-        href: 'https://visioinnovation.com/support',
+        href: '#',
         suffix: <i className='ri-external-link-line text-xl' />,
         target: '_blank'
       },
       {
         label: dictionary['navigation'].documentation,
         icon: 'ri-book-line',
-        href: 'https://visioinnovation.com',
+        href: '#',
         suffix: <i className='ri-external-link-line text-xl' />,
         target: '_blank'
       },
@@ -442,7 +442,7 @@ const verticalMenuData = (dictionary, params) => [
           {
             label: dictionary['navigation'].externalLink,
             icon: 'ri-circle-line',
-            href: 'https://visioinnovation.com',
+            href: '#',
             target: '_blank',
             suffix: <i className='ri-external-link-line text-xl' />
           },

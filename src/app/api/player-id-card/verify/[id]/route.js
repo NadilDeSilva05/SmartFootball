@@ -5,9 +5,10 @@ import { getFirestore } from '@/lib/firebase-admin'
 import { COLLECTIONS } from '@/lib/firestore-collections'
 import { badRequest, notFound, serverError } from '@/app/api/lib/responses'
 
-export async function GET (request, { params }) {
+export async function GET (request, context) {
   try {
-    const id = await Promise.resolve(params?.id)
+    const params = await context.params
+    const id = params?.id
     if (!id) return badRequest('Player id required')
     const db = getFirestore()
     const playerSnap = await db.collection(COLLECTIONS.clubPlayers).doc(id).get()

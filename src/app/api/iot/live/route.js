@@ -1,5 +1,5 @@
 /**
- * GET /api/iot/live?matchId= – get current live metrics for a match (optional; dashboard can use Firestore onSnapshot instead)
+ * GET /api/iot/live?matchId= – get current live metrics for a match (all players: live + stopped). Used when coach dashboard has no RTDB client.
  */
 import { getFirestore } from '@/lib/firebase-admin'
 import { COLLECTIONS } from '@/lib/firestore-collections'
@@ -11,7 +11,7 @@ export async function GET (request) {
     const matchId = searchParams.get('matchId')
     if (!matchId) return badRequest('matchId query required')
     const db = getFirestore()
-    const snap = await db.collection(COLLECTIONS.liveMetrics).where('matchId', '==', matchId).where('status', '==', 'live').get()
+    const snap = await db.collection(COLLECTIONS.liveMetrics).where('matchId', '==', matchId).get()
     const list = snap.docs.map(d => ({ id: d.id, ...d.data() }))
     return Response.json(list)
   } catch (e) {
