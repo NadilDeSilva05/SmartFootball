@@ -15,10 +15,7 @@ const layoutStub = stub({
 const notificationStub = stub({ snackText: '', snackVariant: '' })
 const modalStub = stub({
   GOAL_MODAL: { modalName: 'GOAL_MODAL', modalStatus: false },
-  ADD_CLIENT_FILE_MODAL: { modalName: 'ADD_CLIENT_FILE_MODAL', modalStatus: false },
-  ADD_FINGERPRINT_MODAL: { modalName: 'ADD_FINGERPRINT_MODAL', modalStatus: false, modalData: null },
-  DELETE_FINGERPRINT_MODAL: { modalName: 'DELETE_FINGERPRINT_MODAL', modalStatus: false, modalData: null },
-  SAVE_FINGERPRINT_MODAL: { modalName: 'SAVE_FINGERPRINT_MODAL', modalStatus: false, modalData: null }
+  ADD_CLIENT_FILE_MODAL: { modalName: 'ADD_CLIENT_FILE_MODAL', modalStatus: false }
 })
 
 const appReducer = combineReducers({
@@ -42,10 +39,7 @@ const appReducer = combineReducers({
     isClientDetailRequestLoading: false,
     updateClientRequestLoading: false,
     selectedClientDetail: {},
-    selectedClientDetailFailed: null,
-    clientDashboardMembershipFeesData: [],
-    isClientDashboardMembershipFeesLoading: false,
-    clientDashboardMembershipFeesFailed: null
+    selectedClientDetailFailed: null
   }),
   settingsReducer: stub({ isGetSettingsLoading: false, getSettingsSuccessData: null, isUpdateSettingsLoading: false }),
   paymentsReducer: stub({}),
@@ -56,19 +50,7 @@ const appReducer = combineReducers({
   cashflowReducer: stub({ getCashflowSuccessData: null, isGetCashflowLoading: false }),
   tasksReducer: stub({}),
   attendance: attendanceReducer,
-  loanReducer: stub({ loanList: [] }),
-  memberFeesReducer: stub({
-    memberFeesList: [],
-    isGetAllMemberFeesLoading: false,
-    getAllMemberFeesSuccessData: null,
-    getAllMemberFeesErrorData: null,
-    isDeleteMemberFeeLoading: false,
-    deleteMemberFeeErrorData: null
-  }),
-  membershipPackagesReducer: stub({ packageList: [] }),
   penaltyReducer: stub({ penaltyList: [] }),
-  expenseReducer: stub({ expenseList: [] }),
-  incomeReducer: stub({ incomeList: [] }),
   clientProgressReducer: stub({ progressList: [] }),
   clientSchedulesReducer: stub({ schedulesList: [], schedules: [], isLoading: false, error: null, isCreating: false, isUpdating: false, isDeleting: false }),
   clientMealPlansReducer: stub({ mealPlansList: [] })

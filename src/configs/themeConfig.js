@@ -17,8 +17,8 @@
  */
 const themeConfig = {
   templateName: 'Smart Football',
-  settingsCookieName: 'smartfootball-mui-demo-1',
-  mode: 'system',
+  settingsCookieName: 'smartfootball-settings',
+  mode: 'light',
   skin: 'default',
   semiDark: false,
   layout: 'vertical',
@@ -31,7 +31,7 @@ const themeConfig = {
     detached: true,
     blur: true // true, false
   },
-  contentWidth: 'compact',
+  contentWidth: 'wide',
   footer: {
     type: 'static',
     contentWidth: 'compact',

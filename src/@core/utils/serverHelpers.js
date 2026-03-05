@@ -28,8 +28,8 @@ export const getMode = async () => {
   const settingsCookie = await getSettingsFromCookie()
   const demoName = await getDemoName()
 
-  // Get mode from cookie or fallback to theme config
-  const _mode = settingsCookie.mode || (demoName && demoConfigs[demoName].mode) || themeConfig.mode
+  // Get mode from cookie or fallback to theme config (default light)
+  const _mode = settingsCookie.mode ?? (demoName && demoConfigs[demoName]?.mode) ?? themeConfig.mode ?? 'light'
 
   return _mode
 }

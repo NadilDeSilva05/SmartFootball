@@ -4,7 +4,6 @@ import 'react-perfect-scrollbar/dist/css/styles.css'
 // Style Imports
 import '@/app/globals.css'
 
-//Generated Icon CSS Imports namo buddhaya
 import '@assets/iconify-icons/generated-icons.css'
 import { AppRouterCacheProvider } from '@mui/material-nextjs/v15-appRouter'
 

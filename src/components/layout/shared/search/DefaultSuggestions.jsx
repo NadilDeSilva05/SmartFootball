@@ -11,109 +11,39 @@ import { getLocalizedUrl } from '@/utils/i18n'
 
 const defaultSuggestions = [
   {
-    sectionLabel: 'Popular Searches',
+    sectionLabel: 'Federation',
     items: [
-      {
-        label: 'Analytics',
-        href: '/dashboards/analytics',
-        icon: 'ri-bar-chart-line'
-      },
-      {
-        label: 'CRM',
-        href: '/dashboards/crm',
-        icon: 'ri-pie-chart-2-line'
-      },
-      {
-        label: 'eCommerce',
-        href: '/dashboards/ecommerce',
-        icon: 'ri-shopping-bag-3-line'
-      },
-      {
-        label: 'User List',
-        href: '/apps/user/list',
-        icon: 'ri-file-user-line'
-      }
+      { label: 'Dashboard', href: '/federation', icon: 'ri-dashboard-line' },
+      { label: 'Clubs', href: '/federation/clubs', icon: 'ri-building-line' },
+      { label: 'Referees', href: '/federation/referees', icon: 'ri-user-star-line' },
+      { label: 'Leagues', href: '/federation/leagues', icon: 'ri-trophy-line' },
+      { label: 'Schedule Matches', href: '/federation/matches/schedule', icon: 'ri-calendar-line' },
+      { label: 'Past Results', href: '/federation/matches/past-results', icon: 'ri-football-line' }
     ]
   },
   {
-    sectionLabel: 'Apps',
+    sectionLabel: 'Club & Match',
     items: [
-      {
-        label: 'Calendar',
-        href: '/apps/calendar',
-        icon: 'ri-calendar-line'
-      },
-      {
-        label: 'Invoice List',
-        href: '/apps/invoice/list',
-        icon: 'ri-file-list-3-line'
-      },
-      {
-        label: 'User List',
-        href: '/apps/user/list',
-        icon: 'ri-file-user-line'
-      },
-      {
-        label: 'Roles & Permissions',
-        href: '/apps/roles',
-        icon: 'ri-lock-unlock-line'
-      }
+      { label: 'Club Dashboard', href: '/club', icon: 'ri-dashboard-line' },
+      { label: 'Players', href: '/club/players', icon: 'ri-user-line' },
+      { label: 'Coaches', href: '/club/coaches', icon: 'ri-user-star-line' },
+      { label: 'Upcoming Matches', href: '/club/matches/upcoming', icon: 'ri-calendar-check-line' },
+      { label: 'Past Matches', href: '/club/matches/past', icon: 'ri-calendar-line' }
     ]
   },
   {
-    sectionLabel: 'Pages',
+    sectionLabel: 'Coach & Referee',
     items: [
-      {
-        label: 'User Profile',
-        href: '/pages/user-profile',
-        icon: 'ri-user-3-line'
-      },
-      {
-        label: 'Account Settings',
-        href: '/pages/account-settings',
-        icon: 'ri-settings-4-line'
-      },
-      {
-        label: 'Pricing',
-        href: '/pages/pricing',
-        icon: 'ri-money-dollar-circle-line'
-      },
-      {
-        label: 'FAQ',
-        href: '/pages/faq',
-        icon: 'ri-question-line'
-      }
-    ]
-  },
-  {
-    sectionLabel: 'Forms & Charts',
-    items: [
-      {
-        label: 'Form Layouts',
-        href: '/forms/form-layouts',
-        icon: 'ri-file-text-line'
-      },
-      {
-        label: 'Form Validation',
-        href: '/forms/form-validation',
-        icon: 'ri-checkbox-multiple-line'
-      },
-      {
-        label: 'Form Wizard',
-        href: '/forms/form-wizard',
-        icon: 'ri-equalizer-line'
-      },
-      {
-        label: 'Apex Charts',
-        href: '/charts/apex-charts',
-        icon: 'ri-line-chart-line'
-      }
+      { label: 'Live Match', href: '/coach/live-dashboard', icon: 'ri-heart-pulse-line' },
+      { label: 'Substitutions', href: '/coach/substitutions', icon: 'ri-repeat-line' },
+      { label: 'Injury Alerts', href: '/coach/injury-alerts', icon: 'ri-alarm-warning-line' },
+      { label: 'QR Scanner', href: '/referee/qr-scanner', icon: 'ri-qr-scan-2-line' },
+      { label: 'Player Verification', href: '/referee/player-verification', icon: 'ri-user-search-line' }
     ]
   }
 ]
 
 const DefaultSuggestions = () => {
-  // Hooks
   const { query } = useKBar()
   const { lang: locale } = useParams()
 
