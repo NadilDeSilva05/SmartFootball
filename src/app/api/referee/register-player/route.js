@@ -22,6 +22,7 @@ export async function POST (request) {
       playerId,
       playerName: playerName ?? '',
       club: club ?? '',
+      clubId: body.clubId ?? '',
       jerseyNumber: jerseyNumber ?? '',
       scannedAt: new Date().toISOString()
     })

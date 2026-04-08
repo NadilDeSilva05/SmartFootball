@@ -23,18 +23,25 @@ import TableHead from '@mui/material/TableHead'
 import TableRow from '@mui/material/TableRow'
 import Chip from '@mui/material/Chip'
 import CircularProgress from '@mui/material/CircularProgress'
+import Dialog from '@mui/material/Dialog'
+import DialogTitle from '@mui/material/DialogTitle'
+import DialogContent from '@mui/material/DialogContent'
+import DialogActions from '@mui/material/DialogActions'
 import { Html5Qrcode } from 'html5-qrcode'
+import { useSelector } from 'react-redux'
+import { ref, onValue, off } from 'firebase/database'
+import { getRealtimeDbClient } from '@/lib/firebase-client'
 
-function safeStopScanner (scanner) {
+function safeStopScanner(scanner) {
   if (!scanner || typeof scanner.stop !== 'function') return
   try {
-    scanner.stop().catch(() => {})
+    scanner.stop().catch(() => { })
   } catch {
     // Library may throw synchronously e.g. "Cannot stop, scanner is not running"
   }
 }
 
-function parsePlayerIdFromUrl (urlString) {
+function parsePlayerIdFromUrl(urlString) {
   try {
     const url = new URL(urlString)
     const path = url.pathname || ''
@@ -51,12 +58,17 @@ function parsePlayerIdFromUrl (urlString) {
 }
 
 const RefereeQRScanner = () => {
+  const token = useSelector(state => state?.authenticationReducer?.loginData?.token)
+  const [refereeId, setRefereeId] = useState(undefined)
   const [scanning, setScanning] = useState(false)
   const [matches, setMatches] = useState([])
   const [selectedMatchId, setSelectedMatchId] = useState('')
   const [lastScanned, setLastScanned] = useState(null)
   const [playerDetails, setPlayerDetails] = useState(null)
   const [devices, setDevices] = useState([])
+  const [activeLinks, setActiveLinks] = useState([])
+  const [connectModalOpen, setConnectModalOpen] = useState(false)
+  const [playerToConnect, setPlayerToConnect] = useState(null)
   const [linkingDeviceId, setLinkingDeviceId] = useState(null)
   const [registered, setRegistered] = useState([])
   const [loadingMatches, setLoadingMatches] = useState(true)
@@ -64,26 +76,63 @@ const RefereeQRScanner = () => {
   const html5QrRef = useRef(null)
 
   const selectedMatch = matches.find(m => m.id === selectedMatchId)
+  const selectedMatchRef = useRef(null)
+  const registeredRef = useRef([])
+
+  useEffect(() => {
+    selectedMatchRef.current = selectedMatch
+  }, [selectedMatch])
+
+  useEffect(() => {
+    registeredRef.current = registered
+  }, [registered])
+
+  useEffect(() => {
+    if (!token) {
+      setRefereeId(null)
+      return
+    }
+    let cancelled = false
+    fetch('/api/auth/me', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(me => { if (!cancelled) setRefereeId(me.refereeId || null) })
+      .catch(() => { if (!cancelled) setRefereeId(null) })
+    return () => { cancelled = true }
+  }, [token])
 
   const fetchMatches = useCallback(async () => {
+    if (refereeId === undefined) return
     try {
       setLoadingMatches(true)
-      const res = await fetch('/api/matches?status=scheduled')
+      const url = refereeId
+        ? `/api/matches?status=scheduled&refereeId=${encodeURIComponent(refereeId)}`
+        : '/api/matches?status=scheduled'
+      const res = await fetch(url)
       const list = await res.json().catch(() => [])
       setMatches(Array.isArray(list) ? list : [])
       if (list?.length && !selectedMatchId) setSelectedMatchId(list[0]?.id || '')
     } finally {
       setLoadingMatches(false)
     }
-  }, [selectedMatchId])
+  }, [selectedMatchId, refereeId])
 
-  const fetchDevices = useCallback(async () => {
+  const fetchDevicesFirestoreFallback = useCallback(async () => {
     try {
       const res = await fetch('/api/iot/devices')
       const list = await res.json().catch(() => [])
       setDevices(Array.isArray(list) ? list : [])
     } catch {
       setDevices([])
+    }
+  }, [])
+
+  const fetchActiveLinks = useCallback(async () => {
+    try {
+      const res = await fetch('/api/iot/player-device-link')
+      const list = await res.json().catch(() => [])
+      setActiveLinks(Array.isArray(list) ? list : [])
+    } catch {
+      setActiveLinks([])
     }
   }, [])
 
@@ -103,10 +152,51 @@ const RefereeQRScanner = () => {
   }, [fetchMatches])
 
   useEffect(() => {
-    fetchDevices()
-    const t = setInterval(fetchDevices, 15000)
+    const rtdb = getRealtimeDbClient()
+    if (!rtdb) {
+      fetchDevicesFirestoreFallback()
+      const t = setInterval(fetchDevicesFirestoreFallback, 15000)
+      return () => clearInterval(t)
+    }
+    const devicesRef = ref(rtdb, 'devices')
+    const handler = snapshot => {
+      const val = snapshot.val()
+      if (!val || typeof val !== 'object') {
+        setDevices([])
+        return
+      }
+      const list = Object.keys(val)
+        .filter(deviceId => {
+          const node = val[deviceId]
+          return node && typeof node === 'object'
+        })
+        .map(deviceId => {
+          const data = val[deviceId] || {}
+          const sensor = data.sensor || {}
+          const hr = sensor.heartRate || {}
+          const motion = sensor.motion || {}
+          const hasSensor = sensor && Object.keys(sensor).length > 0
+          return {
+            id: deviceId,
+            deviceId,
+            name: deviceId,
+            status: hasSensor ? 'online' : 'offline',
+            previewBpm: typeof hr.bpm === 'number' ? hr.bpm : null,
+            previewSteps: typeof motion.steps === 'number' ? motion.steps : null
+          }
+        })
+        .sort((a, b) => a.deviceId.localeCompare(b.deviceId))
+      setDevices(list)
+    }
+    onValue(devicesRef, handler)
+    return () => off(devicesRef, 'value', handler)
+  }, [fetchDevicesFirestoreFallback])
+
+  useEffect(() => {
+    fetchActiveLinks()
+    const t = setInterval(fetchActiveLinks, 15000)
     return () => clearInterval(t)
-  }, [fetchDevices])
+  }, [fetchActiveLinks])
 
   useEffect(() => {
     fetchRegistered()
@@ -144,17 +234,33 @@ const RefereeQRScanner = () => {
           decodedText => {
             const playerId = parsePlayerIdFromUrl(decodedText)
             if (!playerId) return
+
+            const matchId = selectedMatchRef.current?.id;
+            if (matchId && registeredRef.current.some(r => r.matchId === matchId && r.playerId === playerId)) {
+              safeStopScanner(html5Qr)
+              setScanning(false)
+              setScanError('This player has already been registered for the current match.')
+              return
+            }
+
             safeStopScanner(html5Qr)
             setScanning(false)
             setLastScanned({ playerId, scannedAt: new Date().toISOString() })
             fetch(`/api/player-id-card/verify/${playerId}`)
               .then(r => r.json())
               .then(data => {
-                setPlayerDetails({ player: data.player, club: data.club })
+                const match = selectedMatchRef.current;
+                const clubId = data.club?.id || data.club?.clubId;
+                if (match && clubId !== match.homeClubId && clubId !== match.awayClubId) {
+                  setScanError(`Player's club does not match the playing clubs (${match.homeClubName || match.homeClubId} vs ${match.awayClubName || match.awayClubId}). Scanned club: ${data.club?.clubName || data.club?.name || clubId}`);
+                  setPlayerDetails(null);
+                } else {
+                  setPlayerDetails({ player: data.player, club: data.club })
+                }
               })
               .catch(() => setPlayerDetails(null))
           },
-          () => {}
+          () => { }
         )
       })
       .catch(err => {
@@ -182,6 +288,7 @@ const RefereeQRScanner = () => {
           playerId: playerDocId,
           playerName: player.fullName,
           club: club?.clubName || '',
+          clubId: club?.id || '',
           jerseyNumber: player.jerseyNo || ''
         })
       })
@@ -192,28 +299,89 @@ const RefereeQRScanner = () => {
   }, [playerDetails, selectedMatchId, selectedMatch, fetchRegistered])
 
   const handleConnectDevice = useCallback(async (deviceId) => {
-    if (!playerDetails?.player || !selectedMatchId) return
+    if (!playerToConnect || !selectedMatchId) return
     setLinkingDeviceId(deviceId)
     try {
       const res = await fetch('/api/iot/player-device-link', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          playerId: playerDetails.player.id,
+          playerId: playerToConnect.playerId,
           deviceId,
           matchId: selectedMatchId
         })
       })
       if (res.ok) {
         setPlayerDetails(prev => prev ? { ...prev, linkedDeviceId: deviceId } : null)
-        fetchDevices()
+        fetchActiveLinks()
+        setConnectModalOpen(false)
+        setPlayerToConnect(null)
       }
     } finally {
       setLinkingDeviceId(null)
     }
-  }, [playerDetails, selectedMatchId, fetchDevices])
+  }, [playerToConnect, selectedMatchId, fetchActiveLinks])
+
+  const connectedDeviceIds = activeLinks.map(l => l.deviceId)
+  const availableDevices = devices.filter(d => !connectedDeviceIds.includes(d.deviceId || d.id))
 
   const registeredForMatch = registered.filter(r => r.matchId === selectedMatchId)
+
+  const homeTeamPlayers = registeredForMatch.filter(r => r.clubId ? r.clubId === selectedMatch?.homeClubId : r.club === (selectedMatch?.homeClubName || selectedMatch?.homeClubId))
+  const awayTeamPlayers = registeredForMatch.filter(r => r.clubId ? r.clubId === selectedMatch?.awayClubId : r.club === (selectedMatch?.awayClubName || selectedMatch?.awayClubId))
+
+  const renderPlayersTable = (players, teamName) => (
+    <Box sx={{ mt: 3, mb: 1 }}>
+      <Typography variant='subtitle1' className='font-semibold mb-2'>{teamName}</Typography>
+      {players.length === 0 ? (
+        <Typography color='text.secondary' variant='body2'>No players registered yet.</Typography>
+      ) : (
+        <Table size='small'>
+          <TableHead>
+            <TableRow>
+              <TableCell>Player</TableCell>
+              <TableCell>Player ID</TableCell>
+              <TableCell>Club</TableCell>
+              <TableCell>Jersey</TableCell>
+              <TableCell>Scanned at</TableCell>
+              <TableCell align='center'>Device</TableCell>
+              <TableCell align='center'>Action</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {players.map((r, i) => {
+              const link = activeLinks.find(l => l.playerId === r.playerId && l.matchId === r.matchId && l.status === 'active')
+              return (
+              <TableRow key={`${r.matchId}-${r.playerId}-${i}`}>
+                <TableCell>{r.playerName}</TableCell>
+                <TableCell>{r.playerId}</TableCell>
+                <TableCell>{r.club}</TableCell>
+                <TableCell>{r.jerseyNumber || '–'}</TableCell>
+                <TableCell>{new Date(r.scannedAt).toLocaleTimeString()}</TableCell>
+                <TableCell align='center'>
+                  {link ? (
+                    <Chip size='small' label={link.deviceId} color='success' variant='outlined' />
+                  ) : (
+                    <Typography variant='caption' color='text.secondary'>–</Typography>
+                  )}
+                </TableCell>
+                <TableCell align='center'>
+                  {!link && (
+                    <Button size='small' variant='outlined' onClick={() => {
+                        setPlayerToConnect(r)
+                        setConnectModalOpen(true)
+                    }}>
+                      Connect Device
+                    </Button>
+                  )}
+                </TableCell>
+              </TableRow>
+            )})}
+          </TableBody>
+        </Table>
+      )}
+    </Box>
+  )
 
   return (
     <div className='space-y-6'>
@@ -294,33 +462,23 @@ const RefereeQRScanner = () => {
                   Register for match
                 </Button>
               </Box>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader title='3. Connect IoT device' subheader='Select the player’s energy management device (ESP32)' />
-            <CardContent>
-              {devices.length === 0 ? (
-                <Typography color='text.secondary'>No devices found. Ensure your ESP32 device is powered and has called the registration API (POST /api/iot/devices).</Typography>
-              ) : (
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                  {devices.map(d => (
-                    <Box key={d.id || d.deviceId} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
-                      <Box>
-                        <Typography fontWeight={600}>{d.name || d.deviceId}</Typography>
-                        <Typography variant='caption' color='text.secondary'>{d.deviceId || d.id} · {d.type || 'device'} · <Chip size='small' label={d.status || 'unknown'} color={d.status === 'online' ? 'success' : 'default'} /></Typography>
-                      </Box>
-                      <Button
-                        variant='outlined'
+              {availableDevices.length > 0 && (
+                <Box sx={{ mt: 2, p: 2, borderRadius: 2, bgcolor: 'action.hover', border: '1px solid', borderColor: 'divider' }}>
+                  <Typography variant='subtitle2' sx={{ mb: 1 }}>Energy IoT devices (live from database)</Typography>
+                  <Typography variant='caption' color='text.secondary' display='block' sx={{ mb: 1 }}>
+                    After registering, use Connect Device in the match list to assign one of these device IDs to the player.
+                  </Typography>
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                    {availableDevices.map(d => (
+                      <Chip
+                        key={d.deviceId || d.id}
                         size='small'
-                        onClick={() => handleConnectDevice(d.deviceId || d.id)}
-                        disabled={linkingDeviceId !== null}
-                        startIcon={linkingDeviceId === (d.deviceId || d.id) ? <CircularProgress size={16} /> : <i className='ri-bluetooth-connect-line' />}
-                      >
-                        {playerDetails.linkedDeviceId === (d.deviceId || d.id) ? 'Connected' : 'Connect to player'}
-                      </Button>
-                    </Box>
-                  ))}
+                        label={d.previewBpm != null ? `${d.deviceId} · ${d.previewBpm} bpm` : `${d.deviceId}`}
+                        color={d.status === 'online' ? 'success' : 'default'}
+                        variant='outlined'
+                      />
+                    ))}
+                  </Box>
                 </Box>
               )}
             </CardContent>
@@ -335,28 +493,10 @@ const RefereeQRScanner = () => {
             {registeredForMatch.length === 0 ? (
               <Typography color='text.secondary'>No players scanned yet. Scan player ID cards and connect their devices.</Typography>
             ) : (
-              <Table size='small'>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Player</TableCell>
-                    <TableCell>Player ID</TableCell>
-                    <TableCell>Club</TableCell>
-                    <TableCell>Jersey</TableCell>
-                    <TableCell>Scanned at</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {registeredForMatch.map((r, i) => (
-                    <TableRow key={`${r.matchId}-${r.playerId}-${i}`}>
-                      <TableCell>{r.playerName}</TableCell>
-                      <TableCell>{r.playerId}</TableCell>
-                      <TableCell>{r.club}</TableCell>
-                      <TableCell>{r.jerseyNumber || '–'}</TableCell>
-                      <TableCell>{new Date(r.scannedAt).toLocaleString()}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+              <>
+                {renderPlayersTable(homeTeamPlayers, `Home Team: ${selectedMatch.homeClubName || selectedMatch.homeClubId}`)}
+                {renderPlayersTable(awayTeamPlayers, `Away Team: ${selectedMatch.awayClubName || selectedMatch.awayClubId}`)}
+              </>
             )}
           </CardContent>
         </Card>
@@ -381,6 +521,44 @@ const RefereeQRScanner = () => {
           </List>
         </CardContent>
       </Card>
+
+      <Dialog open={connectModalOpen} onClose={() => setConnectModalOpen(false)} maxWidth='sm' fullWidth>
+        <DialogTitle>Connect IoT Device for {playerToConnect?.playerName}</DialogTitle>
+        <DialogContent dividers>
+          {availableDevices.length === 0 ? (
+             <Typography color='text.secondary'>No available devices found. Ensure your ESP32 devices are powered and communicating.</Typography>
+          ) : (
+             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+               {availableDevices.map(d => (
+                 <Box key={d.id || d.deviceId} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
+                   <Box>
+                     <Typography fontWeight={600}>{d.name || d.deviceId}</Typography>
+                     <Typography variant='caption' color='text.secondary' component='span' sx={{ display: 'block' }}>
+                       {d.previewBpm != null && `${d.previewBpm} bpm`}
+                       {d.previewBpm != null && d.previewSteps != null && ' · '}
+                       {d.previewSteps != null && `${d.previewSteps} steps`}
+                       {(d.previewBpm == null && d.previewSteps == null) && 'Awaiting sensor data'}
+                     </Typography>
+                     <Typography variant='caption' color='text.secondary'>{d.deviceId || d.id} · <Chip size='small' label={d.status || 'unknown'} color={d.status === 'online' ? 'success' : 'default'} /></Typography>
+                   </Box>
+                   <Button
+                     variant='contained'
+                     size='small'
+                     onClick={() => handleConnectDevice(d.deviceId || d.id)}
+                     disabled={linkingDeviceId !== null}
+                     startIcon={linkingDeviceId === (d.deviceId || d.id) ? <CircularProgress size={16} color='inherit' /> : <i className='ri-link' />}
+                   >
+                     Connect
+                   </Button>
+                 </Box>
+               ))}
+             </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConnectModalOpen(false)}>Cancel</Button>
+        </DialogActions>
+      </Dialog>
     </div>
   )
 }

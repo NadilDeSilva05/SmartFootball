@@ -1,6 +1,5 @@
 'use client'
 
-import { useState, useEffect } from 'react'
 import Card from '@mui/material/Card'
 import CardHeader from '@mui/material/CardHeader'
 import CardContent from '@mui/material/CardContent'
@@ -17,6 +16,10 @@ import FormControl from '@mui/material/FormControl'
 import InputLabel from '@mui/material/InputLabel'
 import Select from '@mui/material/Select'
 import MenuItem from '@mui/material/MenuItem'
+import Button from '@mui/material/Button'
+import Link from 'next/link'
+import { useCoachLivePlayers } from '@/hooks/useCoachLivePlayers'
+import CoachAnalyticsNav from '@views/coach/CoachAnalyticsNav'
 
 const getRiskColor = level => {
   if (level === 'High') return 'error'
@@ -57,40 +60,22 @@ function buildAlerts (players) {
 }
 
 const InjuryRiskAlerts = () => {
-  const [matches, setMatches] = useState([])
-  const [selectedMatchId, setSelectedMatchId] = useState('')
-  const [players, setPlayers] = useState([])
-  const [loading, setLoading] = useState(false)
+  const {
+    coachClubId,
+    isCoachRole,
+    clubMatches,
+    loadingMatches,
+    selectedMatchId,
+    setSelectedMatchId,
+    selectedMatch,
+    players
+  } = useCoachLivePlayers()
+
   const alerts = buildAlerts(players)
 
-  useEffect(() => {
-    setLoading(true)
-    fetch('/api/matches?status=scheduled')
-      .then(r => r.json())
-      .then(arr => {
-        const list = Array.isArray(arr) ? arr : []
-        setMatches(list)
-        if (list.length > 0) setSelectedMatchId(prev => prev || list[0].id)
-      })
-      .finally(() => setLoading(false))
-  }, [])
-
-  useEffect(() => {
-    if (!selectedMatchId) {
-      setPlayers([])
-      return
-    }
-    let cancelled = false
-    const fetchLive = () => {
-      fetch(`/api/iot/live?matchId=${encodeURIComponent(selectedMatchId)}`)
-        .then(r => r.json())
-        .then(arr => { if (!cancelled) setPlayers(Array.isArray(arr) ? arr : []) })
-        .catch(() => { if (!cancelled) setPlayers([]) })
-    }
-    fetchLive()
-    const t = setInterval(fetchLive, 4000)
-    return () => { cancelled = true; clearInterval(t) }
-  }, [selectedMatchId])
+  const matchLabel = selectedMatch
+    ? `${selectedMatch.matchDate || ''} ${selectedMatch.matchTime || ''} – ${selectedMatch.homeClubName || selectedMatch.homeClubId || ''} vs ${selectedMatch.awayClubName || selectedMatch.awayClubId || ''}`
+    : ''
 
   const formatTime = (iso) => {
     if (!iso) return '–'
@@ -103,27 +88,33 @@ const InjuryRiskAlerts = () => {
 
   return (
     <div className='space-y-6'>
+      <CoachAnalyticsNav matchLabel={matchLabel} />
+
       <div className='flex items-center justify-between flex-wrap gap-2'>
         <div>
           <Typography variant='h4' className='font-semibold mb-1'>
             Injury Risk Alerts
           </Typography>
           <Typography variant='body1' color='text.secondary'>
-            Real-time alerts from IoT metrics. Select a match to see risk levels.
+            Same live feed as the dashboard and substitution recommendations — scoped to your club when you are logged in as coach.
           </Typography>
         </div>
         <Chip color='error' variant='tonal' label={`${alerts.length} active alert${alerts.length !== 1 ? 's' : ''}`} icon={<i className='ri-alarm-warning-line' />} />
       </div>
 
-      <FormControl fullWidth size='small' sx={{ maxWidth: 400 }}>
+      {isCoachRole && !coachClubId && (
+        <Alert severity='warning'>No club on your profile — alerts may include all linked players in the match.</Alert>
+      )}
+
+      <FormControl fullWidth size='small' sx={{ maxWidth: 480 }}>
         <InputLabel>Match</InputLabel>
         <Select
           label='Match'
           value={selectedMatchId}
           onChange={e => setSelectedMatchId(e.target.value)}
-          disabled={loading}
+          disabled={loadingMatches || clubMatches.length === 0}
         >
-          {matches.map(m => (
+          {clubMatches.map(m => (
             <MenuItem key={m.id} value={m.id}>
               {m.matchDate} {m.matchTime} – {m.homeClubName || m.homeClubId} vs {m.awayClubName || m.awayClubId}
             </MenuItem>
@@ -131,16 +122,25 @@ const InjuryRiskAlerts = () => {
         </Select>
       </FormControl>
 
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
+        <Button component={Link} href='/coach/substitutions' variant='outlined' size='small' startIcon={<i className='ri-repeat-line' />}>
+          Substitution recommendations
+        </Button>
+        <Button component={Link} href='/coach/performance-history' variant='outlined' size='small' startIcon={<i className='ri-bar-chart-line' />}>
+          Performance history (after subs)
+        </Button>
+      </Box>
+
       <Alert severity='error' icon={<i className='ri-alarm-warning-line text-2xl' />}>
-        High and elevated risk levels require immediate attention. Follow suggested actions to minimise injury.
+        High and elevated risk levels require immediate attention. Coordinate with live dashboard substitution actions.
       </Alert>
 
       {selectedMatchId && alerts.length === 0 && (
-        <Alert severity='success'>No injury risk alerts for this match. All players are within safe metrics.</Alert>
+        <Alert severity='success'>No injury risk alerts for this match. Club players with devices are within current thresholds.</Alert>
       )}
 
       <Card>
-        <CardHeader title='Real-time Alerts List' subheader={selectedMatchId ? 'From connected IoT devices' : 'Select a match'} />
+        <CardHeader title='Real-time Alerts List' subheader={selectedMatchId ? 'From connected IoT devices (club players)' : 'Select a match'} />
         <CardContent>
           <Table size='small'>
             <TableHead>

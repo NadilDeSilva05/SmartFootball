@@ -1,6 +1,5 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
 import Card from '@mui/material/Card'
 import CardHeader from '@mui/material/CardHeader'
 import CardContent from '@mui/material/CardContent'
@@ -13,6 +12,10 @@ import FormControl from '@mui/material/FormControl'
 import InputLabel from '@mui/material/InputLabel'
 import Select from '@mui/material/Select'
 import MenuItem from '@mui/material/MenuItem'
+import Button from '@mui/material/Button'
+import Link from 'next/link'
+import { useCoachLivePlayers } from '@/hooks/useCoachLivePlayers'
+import CoachAnalyticsNav from '@views/coach/CoachAnalyticsNav'
 
 const getPriorityColor = p => {
   if (p === 'critical') return 'error'
@@ -37,12 +40,12 @@ function buildRecommendations (players) {
     if (p.injuryRisk) {
       priority = 'critical'
       reason = 'Injury risk'
-      reasonDetail = `Elevated injury risk – high sprint count (${p.sprintCount}) with fatigue ${p.fatigueLevel}`
+      reasonDetail = `Elevated heart rate / load (HR ${p.heartRate} bpm, fatigue ${p.fatigueLevel}, steps ${p.sprintCount})`
       confidence = 85
     } else if (p.fatigueLevel === 'High') {
       priority = 'high'
       reason = 'High fatigue'
-      reasonDetail = `Fatigue level high – player load ${Number(p.playerLoad).toFixed(1)}`
+      reasonDetail = `Fatigue level high – player load ${Number(p.playerLoad).toFixed(1)} m / energy index ${p.energyLoadIndex ?? '–'}`
       confidence = 80
     } else if (p.fatigueLevel === 'Medium') {
       priority = 'medium'
@@ -59,71 +62,56 @@ function buildRecommendations (players) {
       confidence
     })
   })
-  return list.sort((a, b) => (a.priority === 'critical' ? -1 : a.priority === 'high' ? 0 : 1) - (b.priority === 'critical' ? -1 : b.priority === 'high' ? 0 : 1))
+  return list.sort((a, b) => {
+    const rank = x => (x === 'critical' ? 0 : x === 'high' ? 1 : 2)
+    return rank(a.priority) - rank(b.priority)
+  })
 }
 
 const SubstitutionRecommendations = () => {
-  const [matches, setMatches] = useState([])
-  const [selectedMatchId, setSelectedMatchId] = useState('')
-  const [players, setPlayers] = useState([])
-  const [loading, setLoading] = useState(false)
+  const {
+    coachClubId,
+    isCoachRole,
+    clubMatches,
+    loadingMatches,
+    selectedMatchId,
+    setSelectedMatchId,
+    selectedMatch,
+    players
+  } = useCoachLivePlayers()
+
   const recommendations = buildRecommendations(players)
 
-  const fetchMatches = useCallback(() => {
-    setLoading(true)
-    fetch('/api/matches?status=scheduled')
-      .then(r => r.json())
-      .then(arr => {
-        const list = Array.isArray(arr) ? arr : []
-        setMatches(list)
-        if (list.length > 0) setSelectedMatchId(prev => prev || list[0].id)
-      })
-      .finally(() => setLoading(false))
-  }, [])
-
-  useEffect(() => {
-    fetchMatches()
-  }, [fetchMatches])
-
-  useEffect(() => {
-    if (!selectedMatchId) {
-      setPlayers([])
-      return
-    }
-    let cancelled = false
-    fetch(`/api/iot/live?matchId=${encodeURIComponent(selectedMatchId)}`)
-      .then(r => r.json())
-      .then(arr => { if (!cancelled) setPlayers(Array.isArray(arr) ? arr : []) })
-      .catch(() => { if (!cancelled) setPlayers([]) })
-    const t = setInterval(() => {
-      fetch(`/api/iot/live?matchId=${encodeURIComponent(selectedMatchId)}`)
-        .then(r => r.json())
-        .then(arr => { if (!cancelled) setPlayers(Array.isArray(arr) ? arr : []) })
-        .catch(() => {})
-    }, 5000)
-    return () => { cancelled = true; clearInterval(t) }
-  }, [selectedMatchId])
+  const matchLabel = selectedMatch
+    ? `${selectedMatch.matchDate || ''} ${selectedMatch.matchTime || ''} – ${selectedMatch.homeClubName || selectedMatch.homeClubId || ''} vs ${selectedMatch.awayClubName || selectedMatch.awayClubId || ''}`
+    : ''
 
   return (
     <div className='space-y-6'>
+      <CoachAnalyticsNav matchLabel={matchLabel} />
+
       <div>
         <Typography variant='h4' className='font-semibold mb-1'>
           Substitution Recommendations
         </Typography>
         <Typography variant='body1' color='text.secondary'>
-          Recommendations from live IoT metrics (fatigue and injury risk). Select a match to see suggestions.
+          Uses the same live device feed as the dashboard (Realtime Database when configured). Scope matches your club as coach.
         </Typography>
       </div>
 
-      <FormControl fullWidth size='small' sx={{ maxWidth: 400 }}>
+      {isCoachRole && !coachClubId && (
+        <Alert severity='warning'>No club on your profile — recommendations may include all linked players in the match.</Alert>
+      )}
+
+      <FormControl fullWidth size='small' sx={{ maxWidth: 480 }}>
         <InputLabel>Match</InputLabel>
         <Select
           label='Match'
           value={selectedMatchId}
           onChange={e => setSelectedMatchId(e.target.value)}
-          disabled={loading}
+          disabled={loadingMatches || clubMatches.length === 0}
         >
-          {matches.map(m => (
+          {clubMatches.map(m => (
             <MenuItem key={m.id} value={m.id}>
               {m.matchDate} {m.matchTime} – {m.homeClubName || m.homeClubId} vs {m.awayClubName || m.awayClubId}
             </MenuItem>
@@ -131,12 +119,21 @@ const SubstitutionRecommendations = () => {
         </Select>
       </FormControl>
 
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
+        <Button component={Link} href='/coach/live-dashboard' variant='outlined' size='small' startIcon={<i className='ri-heart-pulse-line' />}>
+          Substitute on live dashboard
+        </Button>
+        <Button component={Link} href='/coach/injury-alerts' variant='outlined' size='small' startIcon={<i className='ri-alarm-warning-line' />}>
+          Open injury alerts
+        </Button>
+      </Box>
+
       <Alert severity='warning' icon={<i className='ri-repeat-line text-2xl' />}>
-        Review recommendations below. Critical and high-priority items require immediate attention.
+        Review recommendations below. Critical and high-priority items align with injury alerts for the same match.
       </Alert>
 
       {recommendations.length === 0 && selectedMatchId && (
-        <Alert severity='info'>No substitution recommendations for this match. All players are within safe metrics, or no live data yet.</Alert>
+        <Alert severity='info'>No substitution recommendations for this match. All club players are within safe metrics, or no live data yet.</Alert>
       )}
 
       <div className='space-y-4'>
