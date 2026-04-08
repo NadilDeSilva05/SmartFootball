@@ -66,11 +66,45 @@ export async function GET (request) {
       }
     }
 
-    if (clubId && userDoc.exists && !profile.clubId) {
-      await db.collection(COLLECTIONS.users).doc(decoded.uid).set(
-        { clubId, updatedAt: new Date().toISOString() },
-        { merge: true }
-      )
+    const isCoach = effectiveRole === 'coach' || profileRole === 'coach' || decodedRole === 'coach'
+    if (!clubId && isCoach) {
+      const rawEmail = String(decoded.email || profile.email || '').trim()
+      if (rawEmail) {
+        const tryEmail = async (em) => {
+          const snap = await db.collection(COLLECTIONS.clubCoaches).where('email', '==', em).limit(1).get()
+          return snap.empty ? null : (snap.docs[0].data()?.clubId || null)
+        }
+        clubId = (await tryEmail(rawEmail)) || (await tryEmail(rawEmail.toLowerCase())) || null
+      }
+    }
+
+    let clubPlayerDocId = profile.clubPlayerDocId || null
+    const isPlayer = effectiveRole === 'player' || profileRole === 'player' || decodedRole === 'player'
+    if (!clubPlayerDocId && isPlayer) {
+      const emails = [...new Set(
+        [decoded.email, profile.email]
+          .filter(Boolean)
+          .map(e => String(e).trim())
+          .flatMap(e => [e, e.toLowerCase()])
+      )]
+      for (const em of emails) {
+        if (!em) continue
+        const pSnap = await db.collection(COLLECTIONS.clubPlayers).where('email', '==', em).limit(5).get()
+        if (!pSnap.empty) {
+          const sorted = pSnap.docs.sort((a, b) =>
+            String(b.data()?.updatedAt || '').localeCompare(String(a.data()?.updatedAt || ''))
+          )
+          clubPlayerDocId = sorted[0].id
+          break
+        }
+      }
+    }
+
+    const userPatch = { updatedAt: new Date().toISOString() }
+    if (clubId && !profile.clubId) userPatch.clubId = clubId
+    if (clubPlayerDocId && !profile.clubPlayerDocId) userPatch.clubPlayerDocId = clubPlayerDocId
+    if (userDoc.exists && Object.keys(userPatch).length > 1) {
+      await db.collection(COLLECTIONS.users).doc(decoded.uid).set(userPatch, { merge: true })
     }
 
     return json({
@@ -80,6 +114,7 @@ export async function GET (request) {
       role: effectiveRole,
       accountRole: effectiveRole,
       clubId,
+      clubPlayerDocId: clubPlayerDocId || undefined,
       refereeId: profile.refereeId || decoded.refereeId || undefined
     })
   } catch (e) {

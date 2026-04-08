@@ -67,7 +67,8 @@ export const requestSignIn = createAsyncThunk(
           fullName: profile.fullName || userCred.user.displayName || email?.split('@')[0] || '',
           role: profileRole || role || ROLES.PLAYER,
           accountRole: profileRole || role || ROLES.PLAYER,
-          clubId: profile.clubId || tokenResult.claims?.clubId || null
+          clubId: profile.clubId || tokenResult.claims?.clubId || null,
+          clubPlayerDocId: profile.clubPlayerDocId || null
         }
       }
     } catch (error) {

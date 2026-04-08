@@ -7,7 +7,7 @@ import { getFirestore } from '@/lib/firebase-admin'
 import { COLLECTIONS } from '@/lib/firestore-collections'
 import { created, badRequest, serverError } from '@/app/api/lib/responses'
 
-export async function GET (request) {
+export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url)
     const matchId = searchParams.get('matchId')
@@ -34,14 +34,16 @@ export async function GET (request) {
       if (!doc) return Response.json(null)
       return Response.json({ id: doc.id, ...doc.data() })
     }
-    return badRequest('matchId, deviceId or playerId query required')
+    const snap = await col.where('status', '==', 'active').get()
+    const list = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+    return Response.json(list)
   } catch (e) {
     console.error(e)
     return serverError(e?.message || 'Failed to get links')
   }
 }
 
-export async function POST (request) {
+export async function POST(request) {
   try {
     const body = await request.json()
     const { playerId, deviceId, matchId } = body
