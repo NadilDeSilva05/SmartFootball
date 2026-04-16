@@ -32,28 +32,44 @@ import { useSelector } from 'react-redux'
 import { ref, onValue, off } from 'firebase/database'
 import { getRealtimeDbClient } from '@/lib/firebase-client'
 
-function safeStopScanner(scanner) {
-  if (!scanner || typeof scanner.stop !== 'function') return
-  try {
-    scanner.stop().catch(() => { })
-  } catch {
-    // Library may throw synchronously e.g. "Cannot stop, scanner is not running"
-  }
-}
-
 function parsePlayerIdFromUrl(urlString) {
+  const raw = typeof urlString === 'string' ? urlString.trim() : ''
+  if (!raw) return null
   try {
-    const url = new URL(urlString)
+    const url = new URL(raw)
     const path = url.pathname || ''
     const match = path.match(/\/player\/verify\/([^/]+)/)
     return match ? match[1].trim() : null
   } catch {
-    if (typeof urlString === 'string' && urlString.includes('/player/verify/')) {
-      const parts = urlString.split('/player/verify/')
+    if (raw.includes('/player/verify/')) {
+      const parts = raw.split('/player/verify/')
       const tail = parts[1]
       return tail ? tail.split('/')[0].split('?')[0].trim() : null
     }
     return null
+  }
+}
+
+/** Prefer rear/environment camera — first enumerated camera is often the selfie cam on phones. */
+function pickCameraIdOrConfig(cameras) {
+  if (!cameras?.length) return { facingMode: 'environment' }
+  const backByLabel = cameras.find(c => /back|rear|environment|wide|world/i.test(c.label || ''))
+  if (backByLabel) return backByLabel.id
+  if (cameras.length > 1) return cameras[cameras.length - 1].id
+  return cameras[0].id
+}
+
+async function safeStopAndClear(scanner) {
+  if (!scanner) return
+  try {
+    if (typeof scanner.stop === 'function') await scanner.stop()
+  } catch {
+    // ignore
+  }
+  try {
+    if (typeof scanner.clear === 'function') await scanner.clear()
+  } catch {
+    // ignore
   }
 }
 
@@ -74,6 +90,7 @@ const RefereeQRScanner = () => {
   const [loadingMatches, setLoadingMatches] = useState(true)
   const [scanError, setScanError] = useState('')
   const html5QrRef = useRef(null)
+  const invalidQrHintAtRef = useRef(0)
 
   const selectedMatch = matches.find(m => m.id === selectedMatchId)
   const selectedMatchRef = useRef(null)
@@ -211,64 +228,122 @@ const RefereeQRScanner = () => {
 
   const stopScanner = useCallback(() => {
     setScanning(false)
-    safeStopScanner(html5QrRef.current)
+    void safeStopAndClear(html5QrRef.current)
     html5QrRef.current = null
   }, [])
 
   useEffect(() => {
     if (!scanning) return
+    let cancelled = false
     let html5Qr
-    Html5Qrcode.getCameras()
-      .then(cameras => {
+
+    const scannerConfig = {
+      fps: 15,
+      qrbox: (viewfinderW, viewfinderH) => {
+        const edge = Math.min(viewfinderW, viewfinderH)
+        const size = Math.max(180, Math.min(320, Math.floor(edge * 0.72)))
+        return { width: size, height: size }
+      }
+    }
+
+    const onDecoded = decodedText => {
+      const playerId = parsePlayerIdFromUrl(decodedText)
+      if (!playerId) {
+        const now = Date.now()
+        if (now - invalidQrHintAtRef.current > 2800) {
+          invalidQrHintAtRef.current = now
+          setScanError('QR detected but it is not a Smart Football player ID link. Use the QR on the official ID card.')
+        }
+        return
+      }
+
+      const matchId = selectedMatchRef.current?.id
+      if (matchId && registeredRef.current.some(r => r.matchId === matchId && r.playerId === playerId)) {
+        void safeStopAndClear(html5Qr)
+        html5QrRef.current = null
+        setScanning(false)
+        setScanError('This player has already been registered for the current match.')
+        return
+      }
+
+      void safeStopAndClear(html5Qr)
+      html5QrRef.current = null
+      setScanning(false)
+      setScanError('')
+      setLastScanned({ playerId, scannedAt: new Date().toISOString() })
+      fetch(`/api/player-id-card/verify/${playerId}`)
+        .then(r => r.json())
+        .then(data => {
+          const match = selectedMatchRef.current
+          const clubId = data.club?.id || data.club?.clubId
+          if (match && clubId !== match.homeClubId && clubId !== match.awayClubId) {
+            setScanError(`Player's club does not match the playing clubs (${match.homeClubName || match.homeClubId} vs ${match.awayClubName || match.awayClubId}). Scanned club: ${data.club?.clubName || data.club?.name || clubId}`)
+            setPlayerDetails(null)
+          } else {
+            setPlayerDetails({ player: data.player, club: data.club })
+          }
+        })
+        .catch(() => setPlayerDetails(null))
+    }
+
+    const startWithCamera = async () => {
+      try {
+        const cameras = await Html5Qrcode.getCameras()
+        if (cancelled) return
         if (!cameras?.length) {
           setScanError('No camera found')
           setScanning(false)
           return
         }
-        const camId = cameras[0]?.id
-        html5Qr = new Html5Qrcode('qr-reader')
+
+        html5Qr = new Html5Qrcode('qr-reader', { verbose: false })
         html5QrRef.current = html5Qr
-        return html5Qr.start(
-          camId,
-          { fps: 10, qrbox: { width: 250, height: 250 } },
-          decodedText => {
-            const playerId = parsePlayerIdFromUrl(decodedText)
-            if (!playerId) return
 
-            const matchId = selectedMatchRef.current?.id;
-            if (matchId && registeredRef.current.some(r => r.matchId === matchId && r.playerId === playerId)) {
-              safeStopScanner(html5Qr)
-              setScanning(false)
-              setScanError('This player has already been registered for the current match.')
-              return
-            }
+        const preferred = pickCameraIdOrConfig(cameras)
+        const attempts = []
+        const pushCam = c => {
+          if (c == null) return
+          const key = typeof c === 'string' ? `id:${c}` : 'facing:environment'
+          if (attempts.some(a => (typeof a === 'string' ? `id:${a}` : 'facing:environment') === key)) return
+          attempts.push(c)
+        }
+        pushCam(preferred)
+        if (typeof preferred === 'string') pushCam({ facingMode: 'environment' })
+        pushCam(cameras[cameras.length - 1]?.id)
+        pushCam(cameras[0]?.id)
 
-            safeStopScanner(html5Qr)
-            setScanning(false)
-            setLastScanned({ playerId, scannedAt: new Date().toISOString() })
-            fetch(`/api/player-id-card/verify/${playerId}`)
-              .then(r => r.json())
-              .then(data => {
-                const match = selectedMatchRef.current;
-                const clubId = data.club?.id || data.club?.clubId;
-                if (match && clubId !== match.homeClubId && clubId !== match.awayClubId) {
-                  setScanError(`Player's club does not match the playing clubs (${match.homeClubName || match.homeClubId} vs ${match.awayClubName || match.awayClubId}). Scanned club: ${data.club?.clubName || data.club?.name || clubId}`);
-                  setPlayerDetails(null);
-                } else {
-                  setPlayerDetails({ player: data.player, club: data.club })
-                }
-              })
-              .catch(() => setPlayerDetails(null))
-          },
-          () => { }
-        )
-      })
-      .catch(err => {
-        setScanError(err?.message || 'Camera error')
-        setScanning(false)
-      })
+        let lastErr
+        for (const cam of attempts) {
+          if (cancelled || !html5Qr) break
+          try {
+            await html5Qr.start(cam, scannerConfig, onDecoded, () => {})
+            lastErr = null
+            break
+          } catch (e) {
+            lastErr = e
+            await safeStopAndClear(html5Qr)
+            if (cancelled) break
+            html5Qr = new Html5Qrcode('qr-reader', { verbose: false })
+            html5QrRef.current = html5Qr
+          }
+        }
+        if (lastErr && !cancelled) {
+          setScanError(lastErr?.message || 'Could not start camera')
+          setScanning(false)
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setScanError(err?.message || 'Camera error')
+          setScanning(false)
+        }
+      }
+    }
+
+    void startWithCamera()
+
     return () => {
-      safeStopScanner(html5QrRef.current || html5Qr)
+      cancelled = true
+      void safeStopAndClear(html5QrRef.current || html5Qr)
       html5QrRef.current = null
     }
   }, [scanning])
