@@ -29,6 +29,10 @@ export function notFound (message = 'Not found') {
   return Response.json({ error: message }, { status: 404 })
 }
 
+export function conflict (message = 'Conflict') {
+  return Response.json({ error: message }, { status: 409 })
+}
+
 export function serverError (message = 'Internal server error') {
   return Response.json({ error: message }, { status: 500 })
 }

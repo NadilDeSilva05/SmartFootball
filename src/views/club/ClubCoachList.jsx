@@ -37,7 +37,8 @@ import { LICENSE_OPTIONS, ROLE_OPTIONS } from '@views/club/constants'
 const columnHelper = createColumnHelper()
 
 const resolveCurrentClub = (clubs, user) => {
-  if (!Array.isArray(clubs) || clubs.length === 0 || !user) return null
+  if (!Array.isArray(clubs) || clubs.length === 0) return null
+  if (user == null || (typeof user === 'object' && !user.uid && !user.clubId && !user.email)) return null
 
   const userClubIds = [user?.clubId, user?.clubDocId, user?.club?.id]
     .map(value => String(value || '').trim())
@@ -92,23 +93,21 @@ const ClubCoachList = () => {
       setLoading(true)
       setError('')
 
-      const clubsRes = await fetch('/api/clubs', { cache: 'no-store' })
+      const [clubsRes, meRes] = await Promise.all([
+        fetch('/api/clubs', { cache: 'no-store' }),
+        token
+          ? fetch('/api/auth/me', { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' })
+          : Promise.resolve({ ok: false })
+      ])
       if (!clubsRes.ok) throw new Error('Failed to load club details')
-      const clubsPayload = await clubsRes.json().catch(() => [])
+      const [clubsPayload, mePayload] = await Promise.all([
+        clubsRes.json().catch(() => []),
+        meRes.ok ? meRes.json().catch(() => ({})) : Promise.resolve({})
+      ])
       const clubs = Array.isArray(clubsPayload) ? clubsPayload : []
+      const identity = { ...user, ...mePayload, uid: mePayload.uid || user?.uid, email: mePayload.email || user?.email }
 
-      let currentClub = resolveCurrentClub(clubs, user)
-
-      if (!currentClub?.id && token) {
-        const meRes = await fetch('/api/auth/me', {
-          headers: { Authorization: `Bearer ${token}` },
-          cache: 'no-store'
-        })
-        if (meRes.ok) {
-          const me = await meRes.json().catch(() => ({}))
-          currentClub = resolveCurrentClub(clubs, me)
-        }
-      }
+      const currentClub = resolveCurrentClub(clubs, identity)
 
       if (!currentClub?.id) {
         setClub(null)

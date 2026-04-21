@@ -52,7 +52,8 @@ const QUICK_ACCESS = [
 ]
 
 const resolveCurrentClub = (clubs, user) => {
-  if (!Array.isArray(clubs) || clubs.length === 0 || !user) return null
+  if (!Array.isArray(clubs) || clubs.length === 0) return null
+  if (user == null || (typeof user === 'object' && !user.uid && !user.clubId && !user.email)) return null
 
   const userClubIds = [user?.clubId, user?.clubDocId, user?.club?.id]
     .map(value => String(value || '').trim())
@@ -120,20 +121,16 @@ const ClubDashboard = () => {
         setLoading(true)
         setError('')
 
-        const [clubs, leagues] = await Promise.all([
+        const [clubs, leagues, mePayload] = await Promise.all([
           fetchJson('/api/clubs'),
-          fetchJson('/api/leagues')
+          fetchJson('/api/leagues'),
+          token
+            ? fetch('/api/auth/me', { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' }).then(async r => (r.ok ? r.json().catch(() => ({})) : {}))
+            : Promise.resolve({})
         ])
 
-        let me = user
-        let currentClub = resolveCurrentClub(Array.isArray(clubs) ? clubs : [], me)
-
-        if (!currentClub && token) {
-          me = await fetchJson('/api/auth/me', {
-            headers: { Authorization: `Bearer ${token}` }
-          })
-          currentClub = resolveCurrentClub(Array.isArray(clubs) ? clubs : [], me)
-        }
+        const me = { ...user, ...mePayload, uid: mePayload.uid || user?.uid, email: mePayload.email || user?.email }
+        const currentClub = resolveCurrentClub(Array.isArray(clubs) ? clubs : [], me)
 
         if (!currentClub?.id) {
           throw new Error('Could not resolve your club for this account')

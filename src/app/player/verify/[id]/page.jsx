@@ -7,8 +7,10 @@ import CircularProgress from '@mui/material/CircularProgress'
 import Card from '@mui/material/Card'
 import CardContent from '@mui/material/CardContent'
 import Divider from '@mui/material/Divider'
+import { useTheme } from '@mui/material/styles'
 
 export default function PlayerVerifyPage ({ params }) {
+  const theme = useTheme()
   const [id] = useState(() => (typeof params?.id === 'string' ? params.id : params?.id))
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -63,9 +65,16 @@ export default function PlayerVerifyPage ({ params }) {
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: '#f5f5f5', py: 3, px: 2 }}>
       <Card sx={{ maxWidth: 420, mx: 'auto', borderRadius: 2, boxShadow: 2 }}>
-        <Box sx={{ bgcolor: '#1a237e', color: 'white', p: 2, borderRadius: '8px 8px 0 0' }}>
+        <Box
+          sx={{
+            color: '#fff',
+            p: 2,
+            borderRadius: '8px 8px 0 0',
+            background: `linear-gradient(135deg, ${theme.palette.success.light} 0%, ${theme.palette.success.main} 45%, ${theme.palette.success.dark} 100%)`
+          }}
+        >
           <Typography variant='h6' fontWeight={600}>Player Verification</Typography>
-          <Typography variant='body2' sx={{ opacity: 0.9 }}>{club?.clubName || 'Club'}</Typography>
+          <Typography variant='body2' sx={{ opacity: 0.95 }}>{club?.clubName || 'Club'}</Typography>
         </Box>
         <CardContent sx={{ pt: 2 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
