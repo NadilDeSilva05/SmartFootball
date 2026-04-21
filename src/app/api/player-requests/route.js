@@ -25,11 +25,17 @@ export async function GET (request) {
     const clubId = searchParams.get('clubId')
     const db = getFirestore()
 
-    const snap = await db.collection(COLLECTIONS.playerRequests).orderBy('createdAt', 'desc').get()
-    let list = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+    let list
+    if (clubId) {
+      const snap = await db.collection(COLLECTIONS.playerRequests).where('clubId', '==', clubId).get()
+      list = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+      list.sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')))
+    } else {
+      const snap = await db.collection(COLLECTIONS.playerRequests).orderBy('createdAt', 'desc').get()
+      list = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+    }
 
     if (status) list = list.filter(item => (item.status || '') === status)
-    if (clubId) list = list.filter(item => (item.clubId || null) === clubId)
 
     return Response.json(list)
   } catch (e) {
@@ -73,29 +79,11 @@ export async function POST (request) {
     const auth = getAuth()
     const db = getFirestore()
 
-    let uid
-    try {
-      const userRecord = await auth.createUser({
-        email: email.trim(),
-        password,
-        displayName: fullName?.trim() || email.split('@')[0]
-      })
-      uid = userRecord.uid
-      await auth.setCustomUserClaims(uid, { role: 'player' })
-      await db.collection(COLLECTIONS.users).doc(uid).set({
-        email: email.trim(),
-        fullName: fullName?.trim() || userRecord.displayName || '',
-        role: 'player',
-        accountRole: 'player',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      })
-    } catch (e) {
-      if (e.code === 'auth/email-already-exists') {
-        return badRequest('An account with this email already exists')
-      }
-      throw e
+    const clubSnap = await db.collection(COLLECTIONS.clubs).doc(clubId).get()
+    if (!clubSnap.exists) {
+      return badRequest('Invalid club')
     }
+
     const submittedPlayerId = String(playerId || '').trim()
 
     let resolvedPlayerId = submittedPlayerId
@@ -132,25 +120,56 @@ export async function POST (request) {
       return badRequest('Player ID already exists in this club')
     }
 
+    let uid
+    try {
+      const userRecord = await auth.createUser({
+        email: email.trim(),
+        password,
+        displayName: fullName?.trim() || email.split('@')[0]
+      })
+      uid = userRecord.uid
+      await auth.setCustomUserClaims(uid, { role: 'player' })
+      await db.collection(COLLECTIONS.users).doc(uid).set({
+        email: email.trim(),
+        fullName: fullName?.trim() || userRecord.displayName || '',
+        role: 'player',
+        accountRole: 'player',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      })
+    } catch (e) {
+      if (e.code === 'auth/email-already-exists') {
+        return badRequest('An account with this email already exists')
+      }
+      throw e
+    }
+
     const ref = db.collection(COLLECTIONS.playerRequests).doc()
-    await ref.set({
-      clubId,
-      playerId: resolvedPlayerId,
-      fullName: fullName.trim(),
-      email: email.trim(),
-      uid,
-      position: position ?? '',
-      nicOrPassport: nicOrPassport ?? '',
-      dateOfBirth: dateOfBirth ?? '',
-      jerseyNo: jerseyNo ?? '',
-      commentaryName: commentaryName ?? '',
-      residentStatus: residentStatus ?? 'local',
-      visaNo: visaNo ?? '',
-      photo: photo ?? null,
-      status: 'pending',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    })
+    try {
+      await ref.set({
+        clubId,
+        playerId: resolvedPlayerId,
+        fullName: fullName.trim(),
+        email: email.trim(),
+        uid,
+        position: position ?? '',
+        nicOrPassport: nicOrPassport ?? '',
+        dateOfBirth: dateOfBirth ?? '',
+        jerseyNo: jerseyNo ?? '',
+        commentaryName: commentaryName ?? '',
+        residentStatus: residentStatus ?? 'local',
+        visaNo: visaNo ?? '',
+        photo: photo ?? null,
+        status: 'pending',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      })
+    } catch (writeErr) {
+      try {
+        await auth.deleteUser(uid)
+      } catch (_) { /* ignore rollback failure */ }
+      throw writeErr
+    }
 
     return created({ id: ref.id, status: 'pending', playerId: resolvedPlayerId })
   } catch (e) {

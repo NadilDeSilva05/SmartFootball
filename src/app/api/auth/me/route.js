@@ -44,19 +44,14 @@ export async function GET (request) {
       if (!byUid.empty) {
         clubDoc = byUid.docs[0]
       } else if (decoded.email || profile.email) {
-        const email = (decoded.email || profile.email || '').trim().toLowerCase()
-        if (email) {
-          const byEmail = await db.collection(COLLECTIONS.clubs).where('adminEmail', '==', decoded.email || profile.email).limit(1).get()
+        const raw = String(decoded.email || profile.email || '').trim()
+        const lower = raw.toLowerCase()
+        const emailVariants = [...new Set([raw, lower].filter(Boolean))]
+        for (const em of emailVariants) {
+          const byEmail = await db.collection(COLLECTIONS.clubs).where('adminEmail', '==', em).limit(1).get()
           if (!byEmail.empty) {
             clubDoc = byEmail.docs[0]
-          } else {
-            const allClubs = await db.collection(COLLECTIONS.clubs).get()
-            clubDoc = allClubs.docs.find(doc => {
-              const data = doc.data() || {}
-              const adminEmail = String(data.adminEmail || data.email || data.clubAdminEmail || '').trim().toLowerCase()
-              const adminUid = String(data.adminUserId || data.userId || data.adminUid || '').trim()
-              return adminEmail === email || adminUid === decoded.uid
-            }) || null
+            break
           }
         }
       }

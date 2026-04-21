@@ -7,6 +7,15 @@ import { badRequest, notFound, serverError } from '@/app/api/lib/responses'
 import PDFDocument from 'pdfkit'
 import QRCode from 'qrcode'
 
+/** Smart Football “system” greens (aligned with pitch / brand) */
+const GREEN = {
+  deep: '#022c22',
+  mid: '#047857',
+  bright: '#059669',
+  accent: '#6ee7b7',
+  ring: '#a7f3d0'
+}
+
 function getBaseUrl (request) {
   try {
     const url = request?.url || request?.nextUrl?.href
@@ -31,113 +40,155 @@ async function fetchPlayerAndClub (playerId) {
   return { player, club }
 }
 
-function formatDob (dateStr) {
-  if (!dateStr) return '—'
-  const d = new Date(dateStr)
-  if (Number.isNaN(d.getTime())) return dateStr
-  const months = 'Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec'
-  const month = months.split(' ')[d.getMonth()]
-  return `${month} ${d.getFullYear()}`
+function formatExpiryIso (date) {
+  if (!date || Number.isNaN(date.getTime())) return '—'
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 }
 
-function splitName (fullName) {
+function calculateAge (dateStr) {
+  if (!dateStr) return '—'
+  const d = new Date(dateStr)
+  if (Number.isNaN(d.getTime())) return '—'
+  let age = new Date().getFullYear() - d.getFullYear()
+  const m = new Date().getMonth() - d.getMonth()
+  if (m < 0 || (m === 0 && new Date().getDate() < d.getDate())) age--
+  return String(Math.max(0, age))
+}
+
+/** Given name(s) and family name (last token), Freja-style layout */
+function splitNameForCard (fullName) {
   const s = (fullName || '').trim()
-  if (!s) return { first: '—', last: '—' }
-  const parts = s.split(/\s+/)
-  if (parts.length === 1) return { first: parts[0], last: '—' }
-  return { first: parts[0], last: parts.slice(1).join(' ').toUpperCase() }
+  if (!s) return { given: '—', family: '—' }
+  const parts = s.split(/\s+/).filter(Boolean)
+  if (parts.length === 1) return { given: parts[0], family: '—' }
+  return { given: parts.slice(0, -1).join(' '), family: parts[parts.length - 1] }
+}
+
+function hostFromUrl (verifyUrl) {
+  try {
+    return new URL(verifyUrl).host
+  } catch (_) {
+    return 'Smart Football'
+  }
 }
 
 async function buildPdfBuffer (player, club, verifyUrl) {
-  const qrSize = 72
-  const qrBuffer = await QRCode.toBuffer(verifyUrl, { width: qrSize, margin: 1, color: { dark: '#000', light: '#fff' } })
+  const cardW = 270
+  const cardH = 430
+  const corner = 14
+  const qrSize = 118
 
-  // Landscape ID card: green header/footer, white body (like sample)
-  const cardW = 576
-  const cardH = 360
-  const green = '#00a651'
-  const headerH = 44
-  const footerH = 40
-  const contentTop = headerH
-  const contentBottom = cardH - footerH
+  const qrBuffer = await QRCode.toBuffer(verifyUrl, { width: qrSize * 2, margin: 1, color: { dark: '#0f172a', light: '#ffffff' } })
+
+  const now = new Date()
+  const expiry = new Date(now)
+  expiry.setFullYear(expiry.getFullYear() + 1)
+  const expiryStr = formatExpiryIso(expiry)
+  const { given, family } = splitNameForCard(player.fullName)
+  const age = calculateAge(player.dateOfBirth)
+  const idLabel = player.nicOrPassport?.trim() ? 'NIC / Passport' : 'Player #'
+  const idVal = player.nicOrPassport?.trim() || player.playerId || '—'
+  const host = hostFromUrl(verifyUrl)
 
   const doc = new PDFDocument({ size: [cardW, cardH], margin: 0 })
   const chunks = []
   doc.on('data', chunk => chunks.push(chunk))
+
   await new Promise((resolve, reject) => {
     doc.on('end', resolve)
     doc.on('error', reject)
 
-    // Green header band
-    doc.rect(0, 0, cardW, headerH).fill(green)
-    doc.fillColor('#ffffff').fontSize(14).text('Smart Football', 24, 12, { continued: false })
-    doc.fontSize(10).fillColor('rgba(255,255,255,0.95)').text('Official Player ID Card', 24, 28, { continued: false })
+    // --- Outer card: rounded + vertical green gradient ---
+    doc.save()
+    doc.roundedRect(0, 0, cardW, cardH, corner).clip()
+    const grad = doc.linearGradient(0, 0, 0, cardH)
+    grad.stop(0, GREEN.bright).stop(0.45, GREEN.mid).stop(1, GREEN.deep)
+    doc.rect(0, 0, cardW, cardH).fill(grad)
+    doc.restore()
 
-    // Green footer band
-    doc.rect(0, contentBottom, cardW, footerH).fill(green)
+    const cx = cardW / 2
+    const photoR = 46
+    const photoCY = 78
 
-    // White content area
-    const left = 24
-    const rowH = 18
-    let y = contentTop + 14
-    const { first: firstName, last: lastName } = splitName(player.fullName)
+    // Soft outer ring (glow)
+    doc.lineWidth(2)
+    doc.strokeColor(GREEN.ring)
+    doc.circle(cx, photoCY, photoR + 4)
+    doc.stroke()
 
-    const line = (label, value) => {
-      const v = value != null && value !== '' ? String(value) : '—'
-      doc.fontSize(9).fillColor('#000').font('Helvetica').text(`${label}: `, left, y, { continued: true })
-      doc.font('Helvetica-Bold').text(v)
-      y += rowH
-    }
-
-    doc.fontSize(9).fillColor('#000')
-    line('First Name', firstName)
-    line('Last Name', lastName)
-    line('DOB', formatDob(player.dateOfBirth))
-    line('Gender', player.gender || '—')
-    line('Player #', player.playerId)
-    line('Club', club?.clubName || '—')
-    line('Level of Play', player.position || player.residentStatus || '—')
-
-    // QR code – between details and photo, prominent and easy to scan
-    const qrX = 228
-    const qrY = contentTop + 12
-    doc.image(qrBuffer, qrX, qrY, { width: qrSize, height: qrSize })
-    doc.fontSize(7).fillColor('#555').text('Scan to verify', qrX, qrY + qrSize + 2, { width: qrSize, align: 'center' })
-
-    // Player photo (right side, large)
-    const photoW = 118
-    const photoH = 142
-    const photoX = cardW - 24 - photoW
-    const photoY = contentTop + 10
+    // Photo clipped to circle
+    doc.save()
+    doc.circle(cx, photoCY, photoR).clip()
     if (player.photo) {
       try {
         const base64 = player.photo.replace(/^data:image\/\w+;base64,/, '')
-        doc.image(Buffer.from(base64, 'base64'), photoX, photoY, { width: photoW, height: photoH })
+        const imgBuf = Buffer.from(base64, 'base64')
+        doc.image(imgBuf, cx - photoR, photoCY - photoR, { width: photoR * 2, height: photoR * 2 })
       } catch (_) {
-        doc.rect(photoX, photoY, photoW, photoH).stroke('#ccc')
-        doc.fontSize(8).fillColor('#999').text('Photo', photoX, photoY + photoH / 2 - 6, { width: photoW, align: 'center' })
+        doc.fillColor('rgba(255,255,255,0.15)').rect(cx - photoR, photoCY - photoR, photoR * 2, photoR * 2).fill()
       }
     } else {
-      doc.rect(photoX, photoY, photoW, photoH).stroke('#ccc')
-      doc.fontSize(8).fillColor('#999').text('Photo', photoX, photoY + photoH / 2 - 6, { width: photoW, align: 'center' })
+      doc.fillColor('rgba(255,255,255,0.12)').rect(cx - photoR, photoCY - photoR, photoR * 2, photoR * 2).fill()
+      doc.fillColor('rgba(255,255,255,0.7)').fontSize(8).font('Helvetica').text('Photo', cx - photoR, photoCY - 4, { width: photoR * 2, align: 'center' })
+    }
+    doc.restore()
+
+    // Inner ring on top of photo edge
+    doc.lineWidth(1.5)
+    doc.strokeColor(GREEN.accent)
+    doc.circle(cx, photoCY, photoR + 1)
+    doc.stroke()
+
+    // --- Profile text (white, centered) ---
+    let ty = photoCY + photoR + 18
+    const labelLine = (label, value) => {
+      const v = value != null && value !== '' ? String(value) : '—'
+      doc.font('Helvetica-Bold').fontSize(8.4).fillColor('#ffffff')
+      doc.text(`${label}: ${v}`, 20, ty, { width: cardW - 40, align: 'center' })
+      ty += 15
     }
 
-    // Issue date – Expiry date box (below photo, green border)
-    const boxX = photoX
-    const boxY = photoY + photoH + 8
-    const boxW = photoW
-    const boxH = 38
-    doc.fillColor('#ffffff').rect(boxX, boxY, boxW, boxH).fill()
-    doc.strokeColor(green).rect(boxX, boxY, boxW, boxH).stroke()
-    const now = new Date()
-    const expiry = new Date(now)
-    expiry.setFullYear(expiry.getFullYear() + 1)
-    const fmt = d => `${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`
-    doc.fontSize(7).fillColor('#333').text('ISSUE DATE - EXPIRY DATE:', boxX + 6, boxY + 6, { width: boxW - 12 })
-    doc.fontSize(10).font('Helvetica-Bold').fillColor('#000').text(`${fmt(now)} - ${fmt(expiry)}`, boxX + 6, boxY + 18, { width: boxW - 12 })
+    labelLine('Expiry date', expiryStr)
+    labelLine('Surname', family)
+    labelLine('Name', given)
+    labelLine('Age', age)
+
+    // --- Bottom: white “nested” verify panel ---
+    const innerX = 18
+    const innerY = Math.min(ty + 14, cardH - 198)
+    const innerW = cardW - 36
+    const innerH = cardH - innerY - 16
+    const headerH = 34
+
+    doc.roundedRect(innerX, innerY, innerW, innerH, 10).fill('#ffffff')
+
+    doc.fillColor('#141414').rect(innerX, innerY, innerW, headerH).fill()
+    doc.fillColor('#ffffff').font('Helvetica').fontSize(6.2)
+    const hint = `Verify ID: scan QR below or open verify page · ${host}`
+    doc.text(hint, innerX + 8, innerY + 11, { width: innerW - 16, align: 'center' })
+
+    doc.strokeColor(GREEN.bright).lineWidth(1.2)
+    doc.moveTo(innerX, innerY + headerH).lineTo(innerX + innerW, innerY + headerH).stroke()
+
+    let vy = innerY + headerH + 10
+    doc.font('Helvetica-Bold').fontSize(9).fillColor('#0f172a')
+    doc.text(`${idLabel}: ${idVal}`, innerX, vy, { width: innerW, align: 'center' })
+    vy += 18
+
+    const qrX = innerX + (innerW - qrSize) / 2
+    doc.image(qrBuffer, qrX, vy, { width: qrSize, height: qrSize })
+    vy += qrSize + 8
+
+    doc.font('Helvetica').fontSize(6.8).fillColor(GREEN.mid)
+    doc.text('Data shared via QR code', innerX, vy, { width: innerW, align: 'center', underline: true, link: verifyUrl })
+    vy += 11
+
+    doc.font('Helvetica').fontSize(5.8).fillColor('#94a3b8')
+    doc.text(club?.clubName ? `${club.clubName} · Official player ID` : 'Smart Football · Official player ID', innerX + 6, vy, { width: innerW - 12, align: 'center' })
 
     doc.end()
   })
+
   return Buffer.concat(chunks)
 }
 
@@ -162,4 +213,3 @@ export async function GET (request) {
     return serverError(e?.message || 'Failed to generate ID card')
   }
 }
-

@@ -86,7 +86,9 @@ const RefereeQRScanner = () => {
   const [connectModalOpen, setConnectModalOpen] = useState(false)
   const [playerToConnect, setPlayerToConnect] = useState(null)
   const [linkingDeviceId, setLinkingDeviceId] = useState(null)
+  const [disconnectingLinkId, setDisconnectingLinkId] = useState(null)
   const [registered, setRegistered] = useState([])
+  const [registerSubmitting, setRegisterSubmitting] = useState(false)
   const [loadingMatches, setLoadingMatches] = useState(true)
   const [scanError, setScanError] = useState('')
   const html5QrRef = useRef(null)
@@ -258,7 +260,10 @@ const RefereeQRScanner = () => {
       }
 
       const matchId = selectedMatchRef.current?.id
-      if (matchId && registeredRef.current.some(r => r.matchId === matchId && r.playerId === playerId)) {
+      const already = matchId && registeredRef.current.some(r =>
+        r.matchId === matchId && String(r.playerId ?? '') === String(playerId ?? '')
+      )
+      if (already) {
         void safeStopAndClear(html5Qr)
         html5QrRef.current = null
         setScanning(false)
@@ -352,8 +357,14 @@ const RefereeQRScanner = () => {
     if (!playerDetails?.player || !selectedMatchId || !selectedMatch) return
     const { player, club } = playerDetails
     const playerDocId = player.id
+    if (registered.some(r => r.matchId === selectedMatchId && String(r.playerId ?? '') === String(playerDocId ?? ''))) {
+      setScanError('This player has already been registered for the current match.')
+      return
+    }
+    setRegisterSubmitting(true)
+    setScanError('')
     try {
-      await fetch('/api/referee/register-player', {
+      const res = await fetch('/api/referee/register-player', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -367,11 +378,20 @@ const RefereeQRScanner = () => {
           jerseyNumber: player.jerseyNo || ''
         })
       })
-      fetchRegistered()
+      const data = await res.json().catch(() => ({}))
+      if (res.status === 409 || !res.ok) {
+        setScanError(data?.error || 'Registration failed')
+        await fetchRegistered()
+        return
+      }
+      await fetchRegistered()
     } catch (e) {
       console.error(e)
+      setScanError(e?.message || 'Registration failed')
+    } finally {
+      setRegisterSubmitting(false)
     }
-  }, [playerDetails, selectedMatchId, selectedMatch, fetchRegistered])
+  }, [playerDetails, selectedMatchId, selectedMatch, fetchRegistered, registered])
 
   const handleConnectDevice = useCallback(async (deviceId) => {
     if (!playerToConnect || !selectedMatchId) return
@@ -397,10 +417,39 @@ const RefereeQRScanner = () => {
     }
   }, [playerToConnect, selectedMatchId, fetchActiveLinks])
 
+  const handleDisconnectDevice = useCallback(async (playerId, deviceId) => {
+    if (!selectedMatchId || !playerId) return
+    setDisconnectingLinkId(`${playerId}_${deviceId}`)
+    try {
+      const res = await fetch('/api/iot/ingest/stop', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          matchId: selectedMatchId,
+          playerId,
+          deviceId
+        })
+      })
+      if (res.ok) {
+        await fetchActiveLinks()
+        await fetchRegistered()
+      }
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setDisconnectingLinkId(null)
+    }
+  }, [selectedMatchId, fetchActiveLinks, fetchRegistered])
+
   const connectedDeviceIds = activeLinks.map(l => l.deviceId)
   const availableDevices = devices.filter(d => !connectedDeviceIds.includes(d.deviceId || d.id))
 
   const registeredForMatch = registered.filter(r => r.matchId === selectedMatchId)
+
+  const currentPlayerDocId = playerDetails?.player?.id
+  const isCurrentPlayerRegistered = Boolean(
+    currentPlayerDocId && registeredForMatch.some(r => String(r.playerId ?? '') === String(currentPlayerDocId))
+  )
 
   const homeTeamPlayers = registeredForMatch.filter(r => r.clubId ? r.clubId === selectedMatch?.homeClubId : r.club === (selectedMatch?.homeClubName || selectedMatch?.homeClubId))
   const awayTeamPlayers = registeredForMatch.filter(r => r.clubId ? r.clubId === selectedMatch?.awayClubId : r.club === (selectedMatch?.awayClubName || selectedMatch?.awayClubId))
@@ -441,7 +490,18 @@ const RefereeQRScanner = () => {
                   )}
                 </TableCell>
                 <TableCell align='center'>
-                  {!link && (
+                  {link ? (
+                    <Button
+                      size='small'
+                      variant='outlined'
+                      color='error'
+                      onClick={() => handleDisconnectDevice(r.playerId, link.deviceId)}
+                      disabled={disconnectingLinkId === `${r.playerId}_${link.deviceId}`}
+                      startIcon={disconnectingLinkId === `${r.playerId}_${link.deviceId}` ? <CircularProgress size={16} color='inherit' /> : <i className='ri-disconnect' />}
+                    >
+                      Disconnect
+                    </Button>
+                  ) : (
                     <Button size='small' variant='outlined' onClick={() => {
                         setPlayerToConnect(r)
                         setConnectModalOpen(true)
@@ -533,8 +593,13 @@ const RefereeQRScanner = () => {
                   <Typography variant='body2' color='text.secondary'>{playerDetails.player.playerId} · {playerDetails.player.position} · #{playerDetails.player.jerseyNo || '–'}</Typography>
                   <Typography variant='body2' color='text.secondary'>{playerDetails.club?.clubName || '–'} · DOB: {playerDetails.player.dateOfBirth || '–'}</Typography>
                 </Box>
-                <Button variant='contained' onClick={handleRegisterAndLink} disabled={!selectedMatchId}>
-                  Register for match
+                <Button
+                  variant='contained'
+                  onClick={handleRegisterAndLink}
+                  disabled={!selectedMatchId || isCurrentPlayerRegistered || registerSubmitting}
+                  startIcon={registerSubmitting ? <CircularProgress size={18} color='inherit' /> : null}
+                >
+                  {isCurrentPlayerRegistered ? 'Already registered' : 'Register for match'}
                 </Button>
               </Box>
               {availableDevices.length > 0 && (

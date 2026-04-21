@@ -32,6 +32,27 @@ export function registrationMatchesCoachClub (reg, coachClubId, match) {
   return !!(onHome || onAway)
 }
 
+/** Metrics shown when a player has no active device stream (e.g. after substitution). */
+export const IDLE_LIVE_METRICS = {
+  heartRate: 0,
+  heartRateInstant: 0,
+  distanceM: 0,
+  speedKmh: 0,
+  steps: 0,
+  strideM: 0,
+  irSignal: null,
+  hrStatus: null,
+  estimatedMet: 0,
+  estimatedKcalPerMin: 0,
+  energyLoadIndex: 0,
+  fatigueLevel: 'Low',
+  workRate: 'Low',
+  playerLoad: 0,
+  sprintCount: 0,
+  highIntensityDist: 0,
+  injuryRisk: false
+}
+
 /**
  * Map RTDB sensor blob to live + energy-oriented metrics.
  * Aligns with LiveMatchDashboard and substitution / injury logic (fatigue, workRate, injuryRisk, etc.).

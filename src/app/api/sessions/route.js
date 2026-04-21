@@ -30,11 +30,19 @@ export async function GET (request) {
         return forbidden('You can only view sessions linked to your player profile')
       }
     }
-    let q = db.collection(COLLECTIONS.matchSessions).orderBy('endedAt', 'desc')
+    let q = db.collection(COLLECTIONS.matchSessions)
+    const needsInMemorySort = Boolean(playerId || matchId)
+
     if (playerId) q = q.where('playerId', '==', playerId)
     if (matchId) q = q.where('matchId', '==', matchId)
+    if (!needsInMemorySort) q = q.orderBy('endedAt', 'desc')
+
     const snap = await q.limit(300).get()
     let list = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+
+    if (needsInMemorySort) {
+      list.sort((a, b) => String(b?.endedAt || '').localeCompare(String(a?.endedAt || '')))
+    }
     if (clubId) {
       const mSnap = await db.collection(COLLECTIONS.matches).get()
       const allowed = new Set(

@@ -31,6 +31,29 @@ const normalizeRole = role => {
   return value
 }
 
+const buildUserPayload = ({ firebaseUser, token, tokenResult, profile }) => {
+  const role = normalizeRole(tokenResult?.claims?.role || tokenResult?.claims?.accountRole)
+  const profileRole = normalizeRole(profile?.role || profile?.accountRole)
+
+  return {
+    token,
+    user: {
+      uid: firebaseUser?.uid || profile?.uid || null,
+      email: firebaseUser?.email || profile?.email || '',
+      fullName:
+        profile?.fullName ||
+        firebaseUser?.displayName ||
+        firebaseUser?.email?.split('@')[0] ||
+        '',
+      role: profileRole || role || ROLES.PLAYER,
+      accountRole: profileRole || role || ROLES.PLAYER,
+      clubId: profile?.clubId || tokenResult?.claims?.clubId || null,
+      clubPlayerDocId: profile?.clubPlayerDocId || null,
+      refereeId: profile?.refereeId || tokenResult?.claims?.refereeId || null
+    }
+  }
+}
+
 export const requestSignIn = createAsyncThunk(
   'authentication/requestSignIn',
   async (
@@ -51,26 +74,11 @@ export const requestSignIn = createAsyncThunk(
       const userCred = await signInWithEmailAndPassword(auth, email, password)
       const token = await userCred.user.getIdToken()
       const tokenResult = await userCred.user.getIdTokenResult()
-      const role = normalizeRole(tokenResult.claims?.role || tokenResult.claims?.accountRole)
-
       const res = await fetch('/api/auth/me', {
         headers: { Authorization: `Bearer ${token}` }
       })
       const profile = res.ok ? await res.json() : {}
-
-      const profileRole = normalizeRole(profile.role || profile.accountRole)
-      return {
-        token,
-        user: {
-          uid: userCred.user.uid,
-          email: userCred.user.email || email,
-          fullName: profile.fullName || userCred.user.displayName || email?.split('@')[0] || '',
-          role: profileRole || role || ROLES.PLAYER,
-          accountRole: profileRole || role || ROLES.PLAYER,
-          clubId: profile.clubId || tokenResult.claims?.clubId || null,
-          clubPlayerDocId: profile.clubPlayerDocId || null
-        }
-      }
+      return buildUserPayload({ firebaseUser: userCred.user, token, tokenResult, profile })
     } catch (error) {
       let message = 'Login failed'
       if (error?.code === 'auth/invalid-credential' || error?.code === 'auth/wrong-password') {
@@ -154,13 +162,38 @@ export const requestSignUp = createAsyncThunk(
   }
 )
 
+export const syncAuthSession = createAsyncThunk(
+  'authentication/syncAuthSession',
+  async ({ firebaseUser, forceRefresh = false } = {}, { rejectWithValue }) => {
+    try {
+      if (!firebaseUser) {
+        return { token: null, user: {} }
+      }
+
+      const token = await firebaseUser.getIdToken(forceRefresh)
+      const tokenResult = await firebaseUser.getIdTokenResult(forceRefresh)
+
+      const res = await fetch('/api/auth/me', {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: 'no-store'
+      })
+      const profile = res.ok ? await res.json().catch(() => ({})) : {}
+
+      return buildUserPayload({ firebaseUser, token, tokenResult, profile })
+    } catch (error) {
+      return rejectWithValue(error?.message || 'Failed to sync auth session')
+    }
+  }
+)
+
 const initialState = {
   loginData: {
     token: null,
     user: {}
   },
   isSignInLoading: false,
-  isSignUpLoading: false
+  isSignUpLoading: false,
+  authInitialized: false
 }
 
 const authenticationSlice = createSlice({
@@ -169,6 +202,17 @@ const authenticationSlice = createSlice({
   reducers: {
     logout: state => {
       state.loginData = { token: null, user: {} }
+      state.authInitialized = true
+    },
+    setLoginData: (state, action) => {
+      state.loginData = {
+        token: action.payload?.token || null,
+        user: action.payload?.user || {}
+      }
+      state.authInitialized = true
+    },
+    markAuthInitialized: state => {
+      state.authInitialized = true
     }
   },
   extraReducers: builder => {
@@ -182,9 +226,11 @@ const authenticationSlice = createSlice({
           token: action.payload?.token,
           user: action.payload?.user || {}
         }
+        state.authInitialized = true
       })
       .addCase(requestSignIn.rejected, state => {
         state.isSignInLoading = false
+        state.authInitialized = true
       })
       .addCase(requestSignUp.pending, state => {
         state.isSignUpLoading = true
@@ -204,8 +250,18 @@ const authenticationSlice = createSlice({
       .addCase(requestSignUpFederationAdmin.rejected, state => {
         state.isSignUpLoading = false
       })
+      .addCase(syncAuthSession.fulfilled, (state, action) => {
+        state.loginData = {
+          token: action.payload?.token || null,
+          user: action.payload?.user || {}
+        }
+        state.authInitialized = true
+      })
+      .addCase(syncAuthSession.rejected, state => {
+        state.authInitialized = true
+      })
   }
 })
 
-export const { logout } = authenticationSlice.actions
+export const { logout, setLoginData, markAuthInitialized } = authenticationSlice.actions
 export default authenticationSlice.reducer

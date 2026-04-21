@@ -47,9 +47,18 @@ export function useCoachLivePlayers () {
 
   const registeredForCoach = useMemo(() => {
     if (!selectedMatchId || !selectedMatch) return []
-    return registered.filter(r =>
+    const filtered = registered.filter(r =>
       registrationMatchesCoachClub(r, coachClubId || '', selectedMatch)
     )
+    // Legacy data can contain duplicate registrations for the same player in a match.
+    // Keep a single row per player so downstream lists/cards have stable unique keys.
+    const uniq = new Map()
+    filtered.forEach(r => {
+      const pid = String(r?.playerId || '').trim()
+      if (!pid) return
+      if (!uniq.has(pid)) uniq.set(pid, r)
+    })
+    return [...uniq.values()]
   }, [registered, selectedMatch, selectedMatchId, coachClubId])
 
   const coachClubPlayerIds = useMemo(
@@ -206,3 +215,4 @@ export function useCoachLivePlayers () {
     isLive
   }
 }
+

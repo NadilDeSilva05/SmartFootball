@@ -4,7 +4,7 @@
  */
 import { getFirestore } from '@/lib/firebase-admin'
 import { COLLECTIONS } from '@/lib/firestore-collections'
-import { created, badRequest, serverError } from '@/app/api/lib/responses'
+import { created, badRequest, conflict, serverError } from '@/app/api/lib/responses'
 
 export async function POST (request) {
   try {
@@ -14,19 +14,28 @@ export async function POST (request) {
       return badRequest('matchId and playerId are required')
     }
     const db = getFirestore()
+    const mid = String(matchId).trim()
+    const pid = String(playerId).trim()
+
+    const existingSnap = await db.collection(COLLECTIONS.matchRegistrations).where('matchId', '==', mid).get()
+    const duplicate = (existingSnap.docs || []).some(d => String(d.data()?.playerId ?? '').trim() === pid)
+    if (duplicate) {
+      return conflict('This player is already registered for this match.')
+    }
+
     const ref = db.collection(COLLECTIONS.matchRegistrations).doc()
     await ref.set({
-      matchId,
+      matchId: mid,
       matchName: matchName ?? '',
       startTime: startTime ?? '',
-      playerId,
+      playerId: pid,
       playerName: playerName ?? '',
       club: club ?? '',
       clubId: body.clubId ?? '',
       jerseyNumber: jerseyNumber ?? '',
       scannedAt: new Date().toISOString()
     })
-    return created({ id: ref.id, matchId, playerId })
+    return created({ id: ref.id, matchId: mid, playerId: pid })
   } catch (e) {
     console.error(e)
     return serverError(e.message)

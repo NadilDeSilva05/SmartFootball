@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import Card from '@mui/material/Card'
 import CardHeader from '@mui/material/CardHeader'
 import CardContent from '@mui/material/CardContent'
@@ -24,6 +24,8 @@ import { addCompletedSession, MATCH_DURATION_MINUTES } from '@views/coach/liveMa
 import { useCoachLivePlayers } from '@/hooks/useCoachLivePlayers'
 import CoachAnalyticsNav from '@views/coach/CoachAnalyticsNav'
 import { SquadOverviewCharts, PlayerTrendChart } from '@views/coach/LiveDashboardCharts'
+import LiveMetricGauge from '@views/coach/LiveMetricGauge'
+import { IDLE_LIVE_METRICS } from '@views/coach/coachLiveShared'
 
 const getFatigueColor = level => {
   if (level === 'Low') return 'success'
@@ -49,8 +51,36 @@ const LiveMatchDashboard = () => {
     players,
     activeLinks,
     coachClubPlayerIds,
-    isLive
+    isLive,
+    registeredForCoach
   } = useCoachLivePlayers()
+
+  const displayPlayers = useMemo(() => {
+    if (!selectedMatchId) return []
+    const mid = String(selectedMatchId)
+    const linkByPlayer = new Map()
+    activeLinks
+      .filter(l => String(l.matchId || '') === mid && String(l.status || '') === 'active')
+      .forEach(l => linkByPlayer.set(String(l.playerId), l))
+    const liveByPlayer = new Map(players.map(p => [String(p.playerId), p]))
+
+    return registeredForCoach.map(reg => {
+      const pid = String(reg.playerId)
+      const link = linkByPlayer.get(pid)
+      const live = liveByPlayer.get(pid)
+      const connected = Boolean(link)
+      const metrics = connected && live ? { ...IDLE_LIVE_METRICS, ...live } : { ...IDLE_LIVE_METRICS }
+      return {
+        ...metrics,
+        id: `${mid}_${pid}`,
+        playerId: pid,
+        name: (live && live.name) || reg.playerName || pid,
+        deviceId: (link && link.deviceId) || (live && live.deviceId) || '',
+        status: connected ? 'live' : 'off',
+        connected
+      }
+    })
+  }, [selectedMatchId, registeredForCoach, activeLinks, players])
 
   const [substituteDialog, setSubstituteDialog] = useState({ open: false, player: null })
   const [elapsedMinutes, setElapsedMinutes] = useState(0)
@@ -64,27 +94,31 @@ const LiveMatchDashboard = () => {
   }, [])
 
   useEffect(() => {
-    if (!selectedMatchId || players.length === 0) return
+    if (!selectedMatchId || displayPlayers.length === 0) return
     const t = setInterval(() => {
       setElapsedMinutes(prev => Math.min(prev + 1, MATCH_DURATION_MINUTES))
     }, 60000)
     return () => clearInterval(t)
-  }, [selectedMatchId, players.length])
+  }, [selectedMatchId, displayPlayers.length])
 
   useEffect(() => {
-    if (!players.length) {
+    if (!displayPlayers.length) {
       setHistoryByPlayer({})
       return
     }
     const now = Date.now()
     setHistoryByPlayer(prev => {
       const next = { ...prev }
-      const activeIds = new Set(players.map(p => p.playerId))
+      const ids = new Set(displayPlayers.map(p => p.playerId))
       Object.keys(next).forEach(pid => {
-        if (!activeIds.has(pid)) delete next[pid]
+        if (!ids.has(pid)) delete next[pid]
       })
-      players.forEach(p => {
+      displayPlayers.forEach(p => {
         const pid = p.playerId
+        if (!p.connected) {
+          next[pid] = []
+          return
+        }
         const row = {
           t: now,
           hr: Number(p.heartRate) || 0,
@@ -96,7 +130,7 @@ const LiveMatchDashboard = () => {
       })
       return next
     })
-  }, [players])
+  }, [displayPlayers])
 
   const handleSubstituteClick = player => setSubstituteDialog({ open: true, player })
 
@@ -243,22 +277,22 @@ const LiveMatchDashboard = () => {
         <CardContent>
           {!selectedMatchId ? (
             <Typography color='text.secondary'>Select a match to view live player metrics from connected devices.</Typography>
-          ) : players.length === 0 ? (
+          ) : displayPlayers.length === 0 ? (
             <Typography color='text.secondary'>
               {isCoachRole && coachClubId
-                ? 'No players from your club have a device linked for this match yet. The referee must scan your squad and assign IoT devices.'
-                : 'No players with connected devices for this match yet. The referee must scan player IDs and connect their IoT devices first.'}
+                ? 'No players from your club are registered for this match yet. The referee must scan your squad first.'
+                : 'No registered players for this match yet. The referee must scan player IDs first.'}
             </Typography>
           ) : (
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-              <SquadOverviewCharts players={players} />
-              {players.map(p => (
+              <SquadOverviewCharts players={displayPlayers} />
+              {displayPlayers.map(p => (
                 <Card
                   key={p.id}
                   variant='outlined'
                   sx={{
                     borderColor: 'divider',
-                    ...(p.injuryRisk && p.status === 'live' ? { borderColor: 'error.main', bgcolor: 'error.light' } : {})
+                    ...(p.injuryRisk && p.connected ? { borderColor: 'error.main', bgcolor: 'error.light' } : {})
                   }}
                 >
                   <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
@@ -276,18 +310,30 @@ const LiveMatchDashboard = () => {
                             <Box>
                               <Typography className='font-medium' component='span'>{p.name}</Typography>
                               <Typography variant='caption' color='text.secondary' component='span' sx={{ display: 'block' }}>
-                                Device {p.deviceId}
+                                {p.connected ? `Device ${p.deviceId || '—'}` : 'No active device — metrics zeroed'}
                               </Typography>
                             </Box>
                           }
                         />
-                        {p.injuryRisk && p.status === 'live' && (
+                        {p.injuryRisk && p.connected && (
                           <Chip size='small' label='Injury risk' color='error' variant='outlined' />
                         )}
                       </Box>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Chip size='small' label='Live' color='success' variant='tonal' icon={<i className='ri-record-circle-line' style={{ fontSize: 14 }} />} />
-                        <Button size='small' variant='outlined' color='warning' onClick={() => handleSubstituteClick(p)}>
+                        <Chip
+                          size='small'
+                          label={p.connected ? 'Live stream' : 'No stream'}
+                          color={p.connected ? 'success' : 'default'}
+                          variant='tonal'
+                          icon={<i className={p.connected ? 'ri-record-circle-line' : 'ri-wifi-off-line'} style={{ fontSize: 14 }} />}
+                        />
+                        <Button
+                          size='small'
+                          variant='outlined'
+                          color='warning'
+                          onClick={() => handleSubstituteClick(p)}
+                          disabled={!p.connected}
+                        >
                           Substitute
                         </Button>
                       </Box>
@@ -300,47 +346,24 @@ const LiveMatchDashboard = () => {
                       <Box
                         sx={{
                           display: 'grid',
-                          gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)' },
+                          gridTemplateColumns: { xs: 'repeat(2, 1fr)', sm: 'repeat(3, 1fr)', md: 'repeat(3, 1fr)', lg: 'repeat(3, 1fr)' },
                           gap: 1.5
                         }}
                       >
-                        <Box sx={{ p: 1.5, borderRadius: 1, bgcolor: 'action.hover' }}>
-                          <Typography variant='caption' color='text.secondary'>Heart rate</Typography>
-                          <Typography variant='h6'>{p.heartRate ?? '–'} <Typography component='span' variant='caption'>bpm</Typography></Typography>
+                        {/* <LiveMetricGauge label='Heart rate' value={p.heartRate} unit='bpm' max={200} colorKey='error' muted={!p.connected} /> */}
+                        <LiveMetricGauge label='Instant HR (sensor)' value={p.heartRateInstant} unit='bpm' max={200} colorKey='error' muted={!p.connected} />
+                        <LiveMetricGauge label='Distance' value={p.distanceM} unit='m' max={8000} decimals={2} colorKey='info' muted={!p.connected} />
+                        <LiveMetricGauge label='Speed' value={p.speedKmh} unit='km/h' max={35} decimals={2} colorKey='info' muted={!p.connected} />
+                        {/* <LiveMetricGauge label='Steps' value={p.steps} max={15000} colorKey='primary' muted={!p.connected} /> */}
+                        {/* <LiveMetricGauge label='Stride length' value={p.strideM} unit='m' max={2} decimals={3} colorKey='secondary' muted={!p.connected} /> */}
+                        <LiveMetricGauge label='Est. intensity (MET)' value={p.estimatedMet} max={12} decimals={2} colorKey='warning' muted={!p.connected} />
+                        <Box>
+                          <LiveMetricGauge label='Est. energy use' value={p.estimatedKcalPerMin} unit='kcal/min' max={22} decimals={2} colorKey='success' muted={!p.connected} />
+                          <Typography variant='caption' color='text.secondary' sx={{ display: 'block', textAlign: 'center', mt: 0.5 }}>
+                            ~70 kg athlete model
+                          </Typography>
                         </Box>
-                        <Box sx={{ p: 1.5, borderRadius: 1, bgcolor: 'action.hover' }}>
-                          <Typography variant='caption' color='text.secondary'>Instant HR (sensor)</Typography>
-                          <Typography variant='h6'>{p.heartRateInstant ?? '–'} <Typography component='span' variant='caption'>bpm</Typography></Typography>
-                        </Box>
-                        <Box sx={{ p: 1.5, borderRadius: 1, bgcolor: 'action.hover' }}>
-                          <Typography variant='caption' color='text.secondary'>Distance</Typography>
-                          <Typography variant='h6'>{Number(p.distanceM ?? 0).toFixed(2)} <Typography component='span' variant='caption'>m</Typography></Typography>
-                        </Box>
-                        <Box sx={{ p: 1.5, borderRadius: 1, bgcolor: 'action.hover' }}>
-                          <Typography variant='caption' color='text.secondary'>Speed</Typography>
-                          <Typography variant='h6'>{Number(p.speedKmh ?? 0).toFixed(2)} <Typography component='span' variant='caption'>km/h</Typography></Typography>
-                        </Box>
-                        <Box sx={{ p: 1.5, borderRadius: 1, bgcolor: 'action.hover' }}>
-                          <Typography variant='caption' color='text.secondary'>Steps</Typography>
-                          <Typography variant='h6'>{p.steps ?? '–'}</Typography>
-                        </Box>
-                        <Box sx={{ p: 1.5, borderRadius: 1, bgcolor: 'action.hover' }}>
-                          <Typography variant='caption' color='text.secondary'>Stride length</Typography>
-                          <Typography variant='h6'>{Number(p.strideM ?? 0).toFixed(3)} <Typography component='span' variant='caption'>m</Typography></Typography>
-                        </Box>
-                        <Box sx={{ p: 1.5, borderRadius: 1, bgcolor: 'action.hover' }}>
-                          <Typography variant='caption' color='text.secondary'>Est. intensity (MET)</Typography>
-                          <Typography variant='h6'>{Number(p.estimatedMet ?? 0).toFixed(2)}</Typography>
-                        </Box>
-                        <Box sx={{ p: 1.5, borderRadius: 1, bgcolor: 'action.hover' }}>
-                          <Typography variant='caption' color='text.secondary'>Est. energy use</Typography>
-                          <Typography variant='h6'>{Number(p.estimatedKcalPerMin ?? 0).toFixed(2)} <Typography component='span' variant='caption'>kcal/min</Typography></Typography>
-                          <Typography variant='caption' color='text.secondary'>~70 kg athlete model</Typography>
-                        </Box>
-                        <Box sx={{ p: 1.5, borderRadius: 1, bgcolor: 'action.hover' }}>
-                          <Typography variant='caption' color='text.secondary'>Energy load index</Typography>
-                          <Typography variant='h6'>{p.energyLoadIndex ?? '–'} <Typography component='span' variant='caption'>/ 100</Typography></Typography>
-                        </Box>
+                        <LiveMetricGauge label='Energy load index' value={p.energyLoadIndex} unit='/ 100' max={100} colorKey='secondary' muted={!p.connected} />
                       </Box>
                       <Box sx={{ mt: 1.5, display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
                         <Chip
