@@ -20,6 +20,7 @@ import Button from '@mui/material/Button'
 import Chip from '@mui/material/Chip'
 import Alert from '@mui/material/Alert'
 import Skeleton from '@mui/material/Skeleton'
+import useMediaQuery from '@mui/material/useMediaQuery'
 import HorizontalWithSubtitle from '@components/card-statistics/HorizontalWithSubtitle'
 import {
   ResponsiveContainer,
@@ -56,6 +57,7 @@ const PerformanceHistory = () => {
   const token = useSelector(state => state?.authenticationReducer?.loginData?.token)
   const user = useSelector(state => state?.authenticationReducer?.loginData?.user)
   const theme = useTheme()
+  const isMobile = useMediaQuery(theme => theme.breakpoints.down('md'))
 
   const [sessions, setSessions] = useState([])
   const [loading, setLoading] = useState(false)
@@ -369,7 +371,7 @@ const PerformanceHistory = () => {
                   <Box sx={{ height: 260 }}>
                     <ResponsiveContainer width='100%' height='100%'>
                       <PieChart>
-                        <Pie data={fatigueData} dataKey='value' nameKey='name' cx='50%' cy='50%' innerRadius={54} outerRadius={82} paddingAngle={3}>
+                        <Pie data={fatigueData} dataKey='value' nameKey='name' cx='50%' cy='50%' innerRadius={isMobile ? 40 : 54} outerRadius={isMobile ? 64 : 82} paddingAngle={3}>
                           {fatigueData.map((entry, index) => {
                             const level = String(entry.name || '').split(' ')[0]
 
@@ -377,7 +379,7 @@ const PerformanceHistory = () => {
                           })}
                         </Pie>
                         <Tooltip contentStyle={{ borderRadius: 8 }} />
-                        <Legend wrapperStyle={{ fontSize: 12 }} />
+                        <Legend wrapperStyle={{ fontSize: isMobile ? 10 : 12 }} />
                       </PieChart>
                     </ResponsiveContainer>
                   </Box>
@@ -397,8 +399,8 @@ const PerformanceHistory = () => {
                 <ResponsiveContainer width='100%' height='100%'>
                   <LineChart data={chartData} margin={{ top: 8, right: 8, left: -8, bottom: 8 }}>
                     <CartesianGrid strokeDasharray='3 3' stroke={theme.palette.divider} />
-                    <XAxis dataKey='label' tick={{ fontSize: 10 }} interval={0} angle={-18} textAnchor='end' height={48} />
-                    <YAxis tick={{ fontSize: 10 }} width={40} />
+                    <XAxis dataKey='label' tick={{ fontSize: isMobile ? 9 : 10 }} interval={0} angle={isMobile ? -28 : -18} textAnchor='end' height={isMobile ? 60 : 48} />
+                    <YAxis tick={{ fontSize: isMobile ? 9 : 10 }} width={isMobile ? 32 : 40} />
                     <Tooltip contentStyle={{ borderRadius: 8, border: `1px solid ${theme.palette.divider}` }} />
                     <Area
                       type='monotone'
@@ -419,11 +421,11 @@ const PerformanceHistory = () => {
                 <ResponsiveContainer width='100%' height='100%'>
                   <ComposedChart data={chartData} margin={{ top: 8, right: 8, left: -8, bottom: 8 }}>
                     <CartesianGrid strokeDasharray='3 3' stroke={theme.palette.divider} />
-                    <XAxis dataKey='label' tick={{ fontSize: 10 }} interval={0} angle={-18} textAnchor='end' height={48} />
-                    <YAxis yAxisId='left' tick={{ fontSize: 10 }} width={50} />
-                    <YAxis yAxisId='right' orientation='right' tick={{ fontSize: 10 }} width={50} />
+                    <XAxis dataKey='label' tick={{ fontSize: isMobile ? 9 : 10 }} interval={0} angle={isMobile ? -28 : -18} textAnchor='end' height={isMobile ? 60 : 48} />
+                    <YAxis yAxisId='left' tick={{ fontSize: isMobile ? 9 : 10 }} width={isMobile ? 36 : 50} />
+                    <YAxis yAxisId='right' orientation='right' tick={{ fontSize: isMobile ? 9 : 10 }} width={isMobile ? 36 : 50} />
                     <Tooltip contentStyle={{ borderRadius: 8, border: `1px solid ${theme.palette.divider}` }} />
-                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                    <Legend wrapperStyle={{ fontSize: isMobile ? 10 : 12 }} />
                     <Bar yAxisId='left' dataKey='distance' name='Distance (m)' fill={theme.palette.primary.main} radius={[4, 4, 0, 0]} maxBarSize={32} />
                     <Bar yAxisId='right' dataKey='steps' name='Steps' fill={theme.palette.success.main} radius={[4, 4, 0, 0]} maxBarSize={32} />
                   </ComposedChart>
@@ -436,10 +438,10 @@ const PerformanceHistory = () => {
                 <ResponsiveContainer width='100%' height='100%'>
                   <BarChart data={chartData} margin={{ top: 8, right: 8, left: -8, bottom: 8 }}>
                     <CartesianGrid strokeDasharray='3 3' stroke={theme.palette.divider} vertical={false} />
-                    <XAxis dataKey='label' tick={{ fontSize: 10 }} interval={0} angle={-18} textAnchor='end' height={48} />
-                    <YAxis tick={{ fontSize: 10 }} width={40} />
+                    <XAxis dataKey='label' tick={{ fontSize: isMobile ? 9 : 10 }} interval={0} angle={isMobile ? -28 : -18} textAnchor='end' height={isMobile ? 60 : 48} />
+                    <YAxis tick={{ fontSize: isMobile ? 9 : 10 }} width={isMobile ? 32 : 40} />
                     <Tooltip contentStyle={{ borderRadius: 8, border: `1px solid ${theme.palette.divider}` }} />
-                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                    <Legend wrapperStyle={{ fontSize: isMobile ? 10 : 12 }} />
                     <Bar dataKey='speed' name='Speed (km/h)' fill={theme.palette.info.main} radius={[4, 4, 0, 0]} maxBarSize={28} />
                     <Bar dataKey='load' name='Energy load /100' fill={theme.palette.warning.main} radius={[4, 4, 0, 0]} maxBarSize={28} />
                   </BarChart>
@@ -473,6 +475,32 @@ const PerformanceHistory = () => {
               <Typography color='text.secondary'>
                 No saved sessions yet. Once you are tracked in a match, your metrics will appear here automatically.
               </Typography>
+            ) : isMobile ? (
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                {sessions.map(session => (
+                  <Card key={session.id} elevation={0} variant='outlined'>
+                    <CardContent>
+                      <Typography variant='subtitle2' fontWeight={700}>{session.matchName || '-'}</Typography>
+                      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 1.5, mb: 1.5 }}>
+                        <Chip size='small' label={session.reason === 'substitution' ? 'Sub' : 'FT'} color={session.reason === 'substitution' ? 'warning' : 'info'} variant='tonal' />
+                        <Chip size='small' label={session.fatigueLevel || 'Low'} color={getFatigueColor(session.fatigueLevel)} variant='outlined' />
+                      </Box>
+                      <Box sx={{ display: 'grid', gap: 0.75 }}>
+                        <Typography variant='body2' color='text.secondary'>Minutes: {session.minutesPlayed ?? '-'}</Typography>
+                        <Typography variant='body2' color='text.secondary'>HR: {session.heartRate ?? '-'}</Typography>
+                        <Typography variant='body2' color='text.secondary'>Instant HR: {session.heartRateInstant ?? '-'}</Typography>
+                        <Typography variant='body2' color='text.secondary'>Steps: {session.steps != null ? Number(session.steps).toLocaleString() : '-'}</Typography>
+                        <Typography variant='body2' color='text.secondary'>Distance: {session.distanceM != null ? Number(session.distanceM).toFixed(1) : '-'} m</Typography>
+                        <Typography variant='body2' color='text.secondary'>Speed: {session.speedKmh != null ? Number(session.speedKmh).toFixed(2) : '-'}</Typography>
+                        <Typography variant='body2' color='text.secondary'>Energy: {session.energyLoadIndex ?? '-'}</Typography>
+                        <Typography variant='body2' color='text.secondary'>MET: {session.estimatedMet != null ? Number(session.estimatedMet).toFixed(2) : '-'}</Typography>
+                        <Typography variant='body2' color='text.secondary'>kcal/min: {session.estimatedKcalPerMin != null ? Number(session.estimatedKcalPerMin).toFixed(2) : '-'}</Typography>
+                        <Typography variant='body2' color='text.secondary'>Ended: {formatDateTimeLabel(session.endedAt)}</Typography>
+                      </Box>
+                    </CardContent>
+                  </Card>
+                ))}
+              </Box>
             ) : (
               <TableContainer component={Paper} variant='outlined' sx={{ borderRadius: 3 }}>
                 <Table size='small'>

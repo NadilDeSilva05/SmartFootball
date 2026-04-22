@@ -27,6 +27,8 @@ import Dialog from '@mui/material/Dialog'
 import DialogTitle from '@mui/material/DialogTitle'
 import DialogContent from '@mui/material/DialogContent'
 import DialogActions from '@mui/material/DialogActions'
+import Divider from '@mui/material/Divider'
+import useMediaQuery from '@mui/material/useMediaQuery'
 import { Html5Qrcode } from 'html5-qrcode'
 import { useSelector } from 'react-redux'
 import { ref, onValue, off } from 'firebase/database'
@@ -93,6 +95,7 @@ const RefereeQRScanner = () => {
   const [scanError, setScanError] = useState('')
   const html5QrRef = useRef(null)
   const invalidQrHintAtRef = useRef(0)
+  const isMobile = useMediaQuery(theme => theme.breakpoints.down('md'))
 
   const selectedMatch = matches.find(m => m.id === selectedMatchId)
   const selectedMatchRef = useRef(null)
@@ -459,7 +462,62 @@ const RefereeQRScanner = () => {
       <Typography variant='subtitle1' className='font-semibold mb-2'>{teamName}</Typography>
       {players.length === 0 ? (
         <Typography color='text.secondary' variant='body2'>No players registered yet.</Typography>
-      ) : (
+        ) : isMobile ? (
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {players.map((r, i) => {
+              const link = activeLinks.find(l => l.playerId === r.playerId && l.matchId === r.matchId && l.status === 'active')
+
+              return (
+                <Card key={`${r.matchId}-${r.playerId}-${i}`} elevation={0} variant='outlined'>
+                  <CardContent>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap', mb: 1.5 }}>
+                      <Box>
+                        <Typography variant='subtitle2' fontWeight={600}>{r.playerName}</Typography>
+                        <Typography variant='caption' color='text.secondary'>{r.playerId}</Typography>
+                      </Box>
+                      {link ? (
+                        <Chip size='small' label={link.deviceId} color='success' variant='outlined' />
+                      ) : (
+                        <Chip size='small' label='No device' variant='outlined' />
+                      )}
+                    </Box>
+                    <Box sx={{ display: 'grid', gap: 0.75 }}>
+                      <Typography variant='body2' color='text.secondary'>Club: {r.club}</Typography>
+                      <Typography variant='body2' color='text.secondary'>Jersey: {r.jerseyNumber || 'â€“'}</Typography>
+                      <Typography variant='body2' color='text.secondary'>Scanned at: {new Date(r.scannedAt).toLocaleTimeString()}</Typography>
+                    </Box>
+                    <Divider sx={{ my: 2 }} />
+                    {link ? (
+                      <Button
+                        size='small'
+                        variant='outlined'
+                        color='error'
+                        fullWidth
+                        onClick={() => handleDisconnectDevice(r.playerId, link.deviceId)}
+                        disabled={disconnectingLinkId === `${r.playerId}_${link.deviceId}`}
+                        startIcon={disconnectingLinkId === `${r.playerId}_${link.deviceId}` ? <CircularProgress size={16} color='inherit' /> : <i className='ri-disconnect' />}
+                      >
+                        Disconnect
+                      </Button>
+                    ) : (
+                      <Button
+                        size='small'
+                        variant='outlined'
+                        fullWidth
+                        onClick={() => {
+                          setPlayerToConnect(r)
+                          setConnectModalOpen(true)
+                        }}
+                      >
+                        Connect Device
+                      </Button>
+                    )}
+                  </CardContent>
+                </Card>
+              )
+            })}
+          </Box>
+        ) : (
         <Table size='small'>
           <TableHead>
             <TableRow>

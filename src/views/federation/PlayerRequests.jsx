@@ -24,6 +24,8 @@ import Box from '@mui/material/Box'
 import IconButton from '@mui/material/IconButton'
 import Alert from '@mui/material/Alert'
 import CircularProgress from '@mui/material/CircularProgress'
+import Divider from '@mui/material/Divider'
+import useMediaQuery from '@mui/material/useMediaQuery'
 
 // Component Imports
 import HorizontalWithSubtitle from '@components/card-statistics/HorizontalWithSubtitle'
@@ -43,6 +45,7 @@ const PlayerRequests = () => {
 
   const [detailsOpen, setDetailsOpen] = useState(false)
   const [selectedDetails, setSelectedDetails] = useState(null)
+  const isMobile = useMediaQuery(theme => theme.breakpoints.down('md'))
 
   const loadData = useCallback(async () => {
     try {
@@ -175,6 +178,37 @@ const PlayerRequests = () => {
             <Box sx={{ py: 3, display: 'flex', justifyContent: 'center' }}>
               <CircularProgress size={22} />
             </Box>
+          ) : isMobile ? (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {pending.length === 0 ? (
+                <Typography align='center' color='text.secondary'>No pending requests</Typography>
+              ) : (
+                pending.map(request => (
+                  <Card key={request.id} elevation={0} variant='outlined'>
+                    <CardContent>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap', mb: 1.5 }}>
+                        <Box>
+                          <Typography className='font-medium'>{request.fullName}</Typography>
+                          <Typography variant='caption' color='text.secondary'>{request.playerId}</Typography>
+                        </Box>
+                        <Chip size='small' label={request.position || '-'} variant='tonal' />
+                      </Box>
+                      <Box sx={{ display: 'grid', gap: 0.75 }}>
+                        <Typography variant='body2' color='text.secondary'>Club: {clubMap[request.clubId] || '-'}</Typography>
+                        <Typography variant='body2' color='text.secondary'>Jersey: {request.jerseyNo || '-'}</Typography>
+                        <Typography variant='body2' color='text.secondary'>Requested: {dateText(request.createdAt)}</Typography>
+                      </Box>
+                      <Divider sx={{ my: 2 }} />
+                      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                        <Button size='small' variant='outlined' onClick={() => openDetails(request)}>Details</Button>
+                        <Button size='small' color='success' variant='outlined' disabled={reviewSubmitting} onClick={() => handleApprove(request.id)}>Approve</Button>
+                        <Button size='small' color='error' variant='outlined' disabled={reviewSubmitting} onClick={() => openRejectDialog(request)}>Reject</Button>
+                      </Box>
+                    </CardContent>
+                  </Card>
+                ))
+              )}
+            </Box>
           ) : (
             <Table>
               <TableHead>
@@ -226,48 +260,77 @@ const PlayerRequests = () => {
       <Card>
         <CardHeader title='Reviewed Requests' />
         <CardContent>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Player</TableCell>
-                <TableCell>Club</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell>Reviewed At</TableCell>
-                <TableCell>Notes</TableCell>
-                <TableCell align='right'>Action</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
+          {isMobile ? (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               {[...approved, ...rejected].length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={6} align='center'>No reviewed requests</TableCell>
-                </TableRow>
+                <Typography align='center' color='text.secondary'>No reviewed requests</Typography>
               ) : (
                 [...approved, ...rejected].map(request => (
-                  <TableRow key={request.id}>
-                    <TableCell>
-                      <Typography className='font-medium'>{request.fullName}</Typography>
-                      <Typography variant='caption' color='text.secondary'>{request.playerId}</Typography>
-                    </TableCell>
-                    <TableCell>{clubMap[request.clubId] || '-'}</TableCell>
-                    <TableCell>
-                      <Chip
-                        size='small'
-                        variant='tonal'
-                        label={request.status}
-                        color={request.status === 'approved' ? 'success' : 'error'}
-                      />
-                    </TableCell>
-                    <TableCell>{dateText(request.reviewedAt || request.updatedAt)}</TableCell>
-                    <TableCell>{request.reviewReason || '-'}</TableCell>
-                    <TableCell align='right'>
-                      <Button size='small' variant='outlined' onClick={() => openDetails(request)}>View</Button>
-                    </TableCell>
-                  </TableRow>
+                  <Card key={request.id} elevation={0} variant='outlined'>
+                    <CardContent>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap', mb: 1.5 }}>
+                        <Box>
+                          <Typography className='font-medium'>{request.fullName}</Typography>
+                          <Typography variant='caption' color='text.secondary'>{request.playerId}</Typography>
+                        </Box>
+                        <Chip size='small' variant='tonal' label={request.status} color={request.status === 'approved' ? 'success' : 'error'} />
+                      </Box>
+                      <Box sx={{ display: 'grid', gap: 0.75 }}>
+                        <Typography variant='body2' color='text.secondary'>Club: {clubMap[request.clubId] || '-'}</Typography>
+                        <Typography variant='body2' color='text.secondary'>Reviewed: {dateText(request.reviewedAt || request.updatedAt)}</Typography>
+                        <Typography variant='body2' color='text.secondary'>Notes: {request.reviewReason || '-'}</Typography>
+                      </Box>
+                      <Divider sx={{ my: 2 }} />
+                      <Button size='small' variant='outlined' fullWidth onClick={() => openDetails(request)}>View details</Button>
+                    </CardContent>
+                  </Card>
                 ))
               )}
-            </TableBody>
-          </Table>
+            </Box>
+          ) : (
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Player</TableCell>
+                  <TableCell>Club</TableCell>
+                  <TableCell>Status</TableCell>
+                  <TableCell>Reviewed At</TableCell>
+                  <TableCell>Notes</TableCell>
+                  <TableCell align='right'>Action</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {[...approved, ...rejected].length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} align='center'>No reviewed requests</TableCell>
+                  </TableRow>
+                ) : (
+                  [...approved, ...rejected].map(request => (
+                    <TableRow key={request.id}>
+                      <TableCell>
+                        <Typography className='font-medium'>{request.fullName}</Typography>
+                        <Typography variant='caption' color='text.secondary'>{request.playerId}</Typography>
+                      </TableCell>
+                      <TableCell>{clubMap[request.clubId] || '-'}</TableCell>
+                      <TableCell>
+                        <Chip
+                          size='small'
+                          variant='tonal'
+                          label={request.status}
+                          color={request.status === 'approved' ? 'success' : 'error'}
+                        />
+                      </TableCell>
+                      <TableCell>{dateText(request.reviewedAt || request.updatedAt)}</TableCell>
+                      <TableCell>{request.reviewReason || '-'}</TableCell>
+                      <TableCell align='right'>
+                        <Button size='small' variant='outlined' onClick={() => openDetails(request)}>View</Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
 

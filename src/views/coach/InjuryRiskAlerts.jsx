@@ -18,6 +18,7 @@ import Select from '@mui/material/Select'
 import MenuItem from '@mui/material/MenuItem'
 import Button from '@mui/material/Button'
 import Link from 'next/link'
+import useMediaQuery from '@mui/material/useMediaQuery'
 import { useCoachLivePlayers } from '@/hooks/useCoachLivePlayers'
 import CoachAnalyticsNav from '@views/coach/CoachAnalyticsNav'
 
@@ -70,6 +71,7 @@ const InjuryRiskAlerts = () => {
     selectedMatch,
     players
   } = useCoachLivePlayers()
+  const isMobile = useMediaQuery(theme => theme.breakpoints.down('md'))
 
   const alerts = buildAlerts(players)
 
@@ -142,45 +144,67 @@ const InjuryRiskAlerts = () => {
       <Card>
         <CardHeader title='Real-time Alerts List' subheader={selectedMatchId ? 'From connected IoT devices (club players)' : 'Select a match'} />
         <CardContent>
-          <Table size='small'>
-            <TableHead>
-              <TableRow>
-                <TableCell>Status</TableCell>
-                <TableCell>Player Name</TableCell>
-                <TableCell>Risk Level</TableCell>
-                <TableCell>Suggested Action</TableCell>
-                <TableCell>Time</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
+          {isMobile ? (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               {alerts.map(alert => (
-                <TableRow key={alert.id} sx={{ bgcolor: alert.riskLevel === 'High' ? 'error.light' : alert.riskLevel === 'Elevated' ? 'warning.light' : 'transparent' }}>
-                  <TableCell>
-                    <Box sx={{ color: `${getRiskColor(alert.riskLevel)}.main` }}>
-                      <i className={getRiskIcon(alert.riskLevel)} style={{ fontSize: 22 }} />
+                <Card key={alert.id} elevation={0} variant='outlined' sx={{ bgcolor: alert.riskLevel === 'High' ? 'error.light' : alert.riskLevel === 'Elevated' ? 'warning.light' : 'transparent' }}>
+                  <CardContent>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1.5 }}>
+                      <Box sx={{ color: `${getRiskColor(alert.riskLevel)}.main` }}>
+                        <i className={getRiskIcon(alert.riskLevel)} style={{ fontSize: 22 }} />
+                      </Box>
+                      <Box sx={{ flex: 1 }}>
+                        <Typography className='font-medium'>{alert.playerName}</Typography>
+                        <Typography variant='caption' color='text.secondary'>{formatTime(alert.updatedAt)}</Typography>
+                      </Box>
+                      <Chip size='small' label={alert.riskLevel} color={getRiskColor(alert.riskLevel)} variant='tonal' />
                     </Box>
-                  </TableCell>
-                  <TableCell>
-                    <Typography className='font-medium'>{alert.playerName}</Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Chip
-                      size='small'
-                      label={alert.riskLevel}
-                      color={getRiskColor(alert.riskLevel)}
-                      variant='tonal'
-                    />
-                  </TableCell>
-                  <TableCell>
                     <Typography variant='body2'>{alert.suggestedAction}</Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant='caption' color='text.secondary'>{formatTime(alert.updatedAt)}</Typography>
-                  </TableCell>
-                </TableRow>
+                  </CardContent>
+                </Card>
               ))}
-            </TableBody>
-          </Table>
+            </Box>
+          ) : (
+            <Table size='small'>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Status</TableCell>
+                  <TableCell>Player Name</TableCell>
+                  <TableCell>Risk Level</TableCell>
+                  <TableCell>Suggested Action</TableCell>
+                  <TableCell>Time</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {alerts.map(alert => (
+                  <TableRow key={alert.id} sx={{ bgcolor: alert.riskLevel === 'High' ? 'error.light' : alert.riskLevel === 'Elevated' ? 'warning.light' : 'transparent' }}>
+                    <TableCell>
+                      <Box sx={{ color: `${getRiskColor(alert.riskLevel)}.main` }}>
+                        <i className={getRiskIcon(alert.riskLevel)} style={{ fontSize: 22 }} />
+                      </Box>
+                    </TableCell>
+                    <TableCell>
+                      <Typography className='font-medium'>{alert.playerName}</Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Chip
+                        size='small'
+                        label={alert.riskLevel}
+                        color={getRiskColor(alert.riskLevel)}
+                        variant='tonal'
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant='body2'>{alert.suggestedAction}</Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant='caption' color='text.secondary'>{formatTime(alert.updatedAt)}</Typography>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
     </div>

@@ -18,6 +18,7 @@ import TableRow from '@mui/material/TableRow'
 import Chip from '@mui/material/Chip'
 import Alert from '@mui/material/Alert'
 import CircularProgress from '@mui/material/CircularProgress'
+import useMediaQuery from '@mui/material/useMediaQuery'
 import HorizontalWithSubtitle from '@components/card-statistics/HorizontalWithSubtitle'
 
 const QUICK_ACCESS = [
@@ -102,6 +103,7 @@ const ClubDashboard = () => {
   const user = useSelector(state => state?.authenticationReducer?.loginData?.user)
   const token = useSelector(state => state?.authenticationReducer?.loginData?.token)
   const firstName = user?.fullName?.split(' ')[0] || user?.email?.split('@')[0] || 'Club Admin'
+  const isMobile = useMediaQuery(theme => theme.breakpoints.down('md'))
 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -296,6 +298,29 @@ const ClubDashboard = () => {
           <Card sx={{ height: '100%' }}>
             <CardHeader title='League Standings' subheader='Current competition table' />
             <CardContent sx={{ pt: 0 }}>
+              {isMobile ? (
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                  {loading ? (
+                    <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
+                      <CircularProgress size={20} />
+                    </Box>
+                  ) : standings.length === 0 ? (
+                    <Typography align='center'>No standings data</Typography>
+                  ) : (
+                    standings.slice(0, 8).map(row => (
+                      <Box key={row.clubId || row.position} sx={{ p: 1.5, borderRadius: 2, bgcolor: row.clubId === club?.id ? 'action.selected' : 'action.hover', border: '1px solid', borderColor: 'divider' }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
+                          <Typography fontWeight={600}>#{row.position} {row.team}</Typography>
+                          <Chip size='small' label={`${row.points} pts`} color='primary' variant='tonal' />
+                        </Box>
+                        <Typography variant='caption' color='text.secondary' sx={{ display: 'block', mt: 0.75 }}>
+                          P {row.played} | W {row.won} | D {row.draw} | L {row.lost}
+                        </Typography>
+                      </Box>
+                    ))
+                  )}
+                </Box>
+              ) : (
               <TableContainer>
                 <Table size='small'>
                   <TableHead>
@@ -344,6 +369,7 @@ const ClubDashboard = () => {
                   </TableBody>
                 </Table>
               </TableContainer>
+              )}
             </CardContent>
           </Card>
         </Grid>
@@ -354,6 +380,32 @@ const ClubDashboard = () => {
           <Card>
             <CardHeader title='Recent Club Matches' />
             <CardContent sx={{ pt: 0 }}>
+              {isMobile ? (
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                  {loading ? (
+                    <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
+                      <CircularProgress size={20} />
+                    </Box>
+                  ) : clubMatches.length === 0 ? (
+                    <Typography align='center'>No matches found for this club</Typography>
+                  ) : (
+                    clubMatches.slice(0, 8).map(match => (
+                      <Box key={match.id} sx={{ p: 1.5, borderRadius: 2, bgcolor: 'action.hover', border: '1px solid', borderColor: 'divider' }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, mb: 1 }}>
+                          <Typography fontWeight={600}>{match.homeClubId === club?.id ? 'Home' : 'Away'} match</Typography>
+                          <Chip size='small' label={match.status || 'scheduled'} color={(match.status || 'scheduled') === 'played' ? 'success' : 'info'} variant='tonal' />
+                        </Box>
+                        <Typography variant='body2' color='text.secondary'>
+                          {formatDate(match.matchDate)}
+                        </Typography>
+                        <Typography variant='caption' color='text.secondary'>
+                          {(match.status || '') === 'played' ? `${match.homeScore ?? 0} - ${match.awayScore ?? 0}` : '-'}
+                        </Typography>
+                      </Box>
+                    ))
+                  )}
+                </Box>
+              ) : (
               <TableContainer>
                 <Table size='small'>
                   <TableHead>
@@ -401,6 +453,7 @@ const ClubDashboard = () => {
                   </TableBody>
                 </Table>
               </TableContainer>
+              )}
             </CardContent>
           </Card>
         </Grid>
