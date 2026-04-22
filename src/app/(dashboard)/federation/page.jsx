@@ -18,6 +18,7 @@ import TableRow from '@mui/material/TableRow'
 import Chip from '@mui/material/Chip'
 import CircularProgress from '@mui/material/CircularProgress'
 import Alert from '@mui/material/Alert'
+import useMediaQuery from '@mui/material/useMediaQuery'
 import HorizontalWithSubtitle from '@components/card-statistics/HorizontalWithSubtitle'
 
 const QUICK_ACCESS = [
@@ -99,6 +100,7 @@ const formatMatchDate = value => {
 const FederationDashboard = () => {
   const user = useSelector(state => state?.authenticationReducer?.loginData?.user)
   const firstName = user?.fullName?.split(' ')[0] || user?.name?.split(' ')[0] || user?.email?.split('@')[0] || 'Admin'
+  const isMobile = useMediaQuery(theme => theme.breakpoints.down('md'))
 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -334,6 +336,31 @@ const FederationDashboard = () => {
               sx={{ position: 'relative' }}
             />
             <CardContent sx={{ pt: 0, position: 'relative' }}>
+              {isMobile ? (
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                  {loading ? (
+                    <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+                      <CircularProgress size={22} />
+                    </Box>
+                  ) : standingsData.length === 0 ? (
+                    <Typography align='center' sx={{ py: 4 }}>
+                      No standings data available.
+                    </Typography>
+                  ) : (
+                    standingsData.map(row => (
+                      <Box key={`${row.position}-${row.team}`} sx={{ p: 1.5, borderRadius: 2, bgcolor: 'action.hover', border: '1px solid', borderColor: 'divider' }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
+                          <Typography fontWeight={600}>#{row.position} {row.team}</Typography>
+                          <Chip label={`${row.points} pts`} size='small' color='primary' variant='tonal' />
+                        </Box>
+                        <Typography variant='caption' color='text.secondary' sx={{ display: 'block', mt: 0.75 }}>
+                          P {row.played} | W {row.won} | D {row.draw} | L {row.lost} | GF {row.goalsFor} | GA {row.goalsAgainst} | GD {row.goalDiff >= 0 ? '+' : ''}{row.goalDiff}
+                        </Typography>
+                      </Box>
+                    ))
+                  )}
+                </Box>
+              ) : (
               <TableContainer>
                 <Table size='small'>
                   <TableHead>
@@ -391,6 +418,7 @@ const FederationDashboard = () => {
                   </TableBody>
                 </Table>
               </TableContainer>
+              )}
             </CardContent>
           </Card>
         </Grid>

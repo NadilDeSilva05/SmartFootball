@@ -16,6 +16,7 @@ import Chip from '@mui/material/Chip'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Alert from '@mui/material/Alert'
+import useMediaQuery from '@mui/material/useMediaQuery'
 
 import { getCompletedSessions } from '@views/coach/liveMatchConstants'
 import CoachAnalyticsNav from '@views/coach/CoachAnalyticsNav'
@@ -29,6 +30,7 @@ const CoachPerformanceHistory = () => {
 
   const [sessions, setSessions] = useState([])
   const [loading, setLoading] = useState(true)
+  const isMobile = useMediaQuery(theme => theme.breakpoints.down('md'))
 
   useEffect(() => {
     let cancelled = false
@@ -114,6 +116,30 @@ const CoachPerformanceHistory = () => {
               <i className='ri-file-list-3-line' style={{ fontSize: 48, opacity: 0.5 }} />
               <Typography variant='body1' sx={{ mt: 1 }}>No session data yet.</Typography>
               <Typography variant='body2'>Substitute players from the live dashboard to persist stats here.</Typography>
+            </Box>
+          ) : isMobile ? (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {sessions.map(s => (
+                <Card key={s.id} elevation={0} variant='outlined'>
+                  <CardContent>
+                    <Typography variant='subtitle2' className='font-medium'>{s.matchName}</Typography>
+                    <Typography variant='body2' color='text.secondary' sx={{ mb: 1.5 }}>{s.playerName}</Typography>
+                    <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 1.5 }}>
+                      <Chip size='small' label={s.reason === 'substitution' ? 'Substituted' : 'Full time'} color={s.reason === 'substitution' ? 'warning' : 'info'} variant='tonal' />
+                      <Chip size='small' label={s.fatigueLevel} color={s.fatigueLevel === 'High' ? 'error' : s.fatigueLevel === 'Medium' ? 'warning' : 'success'} variant='outlined' />
+                    </Box>
+                    <Box sx={{ display: 'grid', gap: 0.75 }}>
+                      <Typography variant='body2' color='text.secondary'>Minutes: {s.minutesPlayed}</Typography>
+                      <Typography variant='body2' color='text.secondary'>Heart Rate: {s.heartRate} bpm</Typography>
+                      <Typography variant='body2' color='text.secondary'>Player Load: {s.playerLoad?.toFixed(1)}</Typography>
+                      <Typography variant='body2' color='text.secondary'>Sprints: {s.sprintCount}</Typography>
+                      <Typography variant='body2' color='text.secondary'>High-Intensity Distance: {s.highIntensityDist}</Typography>
+                      <Typography variant='body2' color='text.secondary'>Work Rate: {s.workRate}</Typography>
+                      <Typography variant='body2' color='text.secondary'>Ended: {s.endedAt ? new Date(s.endedAt).toLocaleString() : 'â€“'}</Typography>
+                    </Box>
+                  </CardContent>
+                </Card>
+              ))}
             </Box>
           ) : (
             <Table size='small'>

@@ -1,6 +1,7 @@
 'use client'
 
 import { useTheme } from '@mui/material/styles'
+import useMediaQuery from '@mui/material/useMediaQuery'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import {
@@ -28,6 +29,7 @@ const FATIGUE_COLORS = {
 
 export function SquadOverviewCharts ({ players }) {
   const theme = useTheme()
+  const isMobile = useMediaQuery(theme => theme.breakpoints.down('md'))
   const primary = theme.palette.primary.main
   const secondary = theme.palette.secondary.main
 
@@ -67,15 +69,15 @@ export function SquadOverviewCharts ({ players }) {
           alignItems: 'stretch'
         }}
       >
-        <Box sx={{ height: 260, width: '100%', p: 1, borderRadius: 2, bgcolor: 'action.hover', border: '1px solid', borderColor: 'divider' }}>
+        <Box sx={{ height: isMobile ? 220 : 260, width: '100%', p: 1, borderRadius: 2, bgcolor: 'action.hover', border: '1px solid', borderColor: 'divider' }}>
           <Typography variant='caption' color='text.secondary' display='block' sx={{ mb: 0.5 }}>
             Heart rate (bpm)
           </Typography>
           <ResponsiveContainer width='100%' height='92%'>
             <BarChart data={barData} margin={{ top: 4, right: 8, left: -8, bottom: 4 }}>
               <CartesianGrid strokeDasharray='3 3' stroke={theme.palette.divider} vertical={false} />
-              <XAxis dataKey='name' tick={{ fontSize: 10 }} interval={0} angle={-20} textAnchor='end' height={48} />
-              <YAxis tick={{ fontSize: 10 }} width={36} />
+              <XAxis dataKey='name' tick={{ fontSize: isMobile ? 9 : 10 }} interval={0} angle={isMobile ? -28 : -20} textAnchor='end' height={isMobile ? 56 : 48} />
+              <YAxis tick={{ fontSize: isMobile ? 9 : 10 }} width={isMobile ? 30 : 36} />
               <Tooltip
                 contentStyle={{ borderRadius: 8, border: `1px solid ${theme.palette.divider}` }}
                 labelStyle={{ fontWeight: 600 }}
@@ -85,18 +87,18 @@ export function SquadOverviewCharts ({ players }) {
           </ResponsiveContainer>
         </Box>
 
-        <Box sx={{ height: 260, width: '100%', p: 1, borderRadius: 2, bgcolor: 'action.hover', border: '1px solid', borderColor: 'divider' }}>
+        <Box sx={{ height: isMobile ? 220 : 260, width: '100%', p: 1, borderRadius: 2, bgcolor: 'action.hover', border: '1px solid', borderColor: 'divider' }}>
           <Typography variant='caption' color='text.secondary' display='block' sx={{ mb: 0.5 }}>
             Energy load index & speed
           </Typography>
           <ResponsiveContainer width='100%' height='92%'>
             <BarChart data={barData} margin={{ top: 4, right: 8, left: -8, bottom: 4 }}>
               <CartesianGrid strokeDasharray='3 3' stroke={theme.palette.divider} vertical={false} />
-              <XAxis dataKey='name' tick={{ fontSize: 10 }} interval={0} angle={-20} textAnchor='end' height={48} />
-              <YAxis yAxisId='left' tick={{ fontSize: 10 }} width={32} />
-              <YAxis yAxisId='right' orientation='right' tick={{ fontSize: 10 }} width={32} />
+              <XAxis dataKey='name' tick={{ fontSize: isMobile ? 9 : 10 }} interval={0} angle={isMobile ? -28 : -20} textAnchor='end' height={isMobile ? 56 : 48} />
+              <YAxis yAxisId='left' tick={{ fontSize: isMobile ? 9 : 10 }} width={isMobile ? 28 : 32} />
+              <YAxis yAxisId='right' orientation='right' tick={{ fontSize: isMobile ? 9 : 10 }} width={isMobile ? 28 : 32} />
               <Tooltip contentStyle={{ borderRadius: 8, border: `1px solid ${theme.palette.divider}` }} />
-              <Legend wrapperStyle={{ fontSize: 12 }} />
+              <Legend wrapperStyle={{ fontSize: isMobile ? 10 : 12 }} />
               <Bar yAxisId='left' dataKey='energyLoad' name='Load /100' fill={secondary} radius={[4, 4, 0, 0]} maxBarSize={28} />
               <Bar yAxisId='right' dataKey='speed' name='km/h' fill={theme.palette.info.main} radius={[4, 4, 0, 0]} maxBarSize={28} />
             </BarChart>
@@ -104,7 +106,7 @@ export function SquadOverviewCharts ({ players }) {
         </Box>
 
         {pieData.length > 0 && (
-          <Box sx={{ height: 260, width: '100%', p: 1, borderRadius: 2, bgcolor: 'action.hover', border: '1px solid', borderColor: 'divider' }}>
+          <Box sx={{ height: isMobile ? 220 : 260, width: '100%', p: 1, borderRadius: 2, bgcolor: 'action.hover', border: '1px solid', borderColor: 'divider' }}>
             <Typography variant='caption' color='text.secondary' display='block' sx={{ mb: 0.5 }}>
               Fatigue distribution
             </Typography>
@@ -116,8 +118,8 @@ export function SquadOverviewCharts ({ players }) {
                   nameKey='name'
                   cx='50%'
                   cy='50%'
-                  innerRadius={48}
-                  outerRadius={72}
+                  innerRadius={isMobile ? 36 : 48}
+                  outerRadius={isMobile ? 58 : 72}
                   paddingAngle={2}
                 >
                   {pieData.map((entry, index) => {
@@ -126,7 +128,7 @@ export function SquadOverviewCharts ({ players }) {
                   })}
                 </Pie>
                 <Tooltip contentStyle={{ borderRadius: 8 }} />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <Legend wrapperStyle={{ fontSize: isMobile ? 10 : 11 }} />
               </PieChart>
             </ResponsiveContainer>
           </Box>

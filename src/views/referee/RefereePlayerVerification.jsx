@@ -19,6 +19,7 @@ import InputLabel from '@mui/material/InputLabel'
 import Select from '@mui/material/Select'
 import MenuItem from '@mui/material/MenuItem'
 import CustomAvatar from '@core/components/mui/Avatar'
+import useMediaQuery from '@mui/material/useMediaQuery'
 
 const getEligibilityColor = status => (status === 'eligible' ? 'success' : 'error')
 
@@ -30,6 +31,7 @@ const RefereePlayerVerification = () => {
   const [selectedMatchId, setSelectedMatchId] = useState('')
   const [verifiedPlayer, setVerifiedPlayer] = useState(null)
   const [loading, setLoading] = useState(true)
+  const isMobile = useMediaQuery(theme => theme.breakpoints.down('md'))
 
   useEffect(() => {
     if (!token) {
@@ -164,6 +166,24 @@ const RefereePlayerVerification = () => {
             <Typography color='text.secondary'>Loading…</Typography>
           ) : assignedMatches.length === 0 ? (
             <Typography color='text.secondary'>No scheduled matches found.</Typography>
+          ) : isMobile ? (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {assignedMatches.map(m => (
+                <Card key={m.id} elevation={0} variant='outlined'>
+                  <CardContent>
+                    <Typography variant='subtitle1' fontWeight={600} color='text.primary'>
+                      {m.homeClubName || m.homeClubId} vs {m.awayClubName || m.awayClubId}
+                    </Typography>
+                    <Typography variant='body2' color='text.secondary' sx={{ mt: 1 }}>
+                      {m.matchDate} {m.matchTime}
+                    </Typography>
+                    <Typography variant='body2' color='text.secondary'>
+                      Venue: {m.venue || 'â€“'}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              ))}
+            </Box>
           ) : (
             <Table size='small'>
               <TableHead>

@@ -6,13 +6,17 @@ import { useState, useMemo, useEffect, useCallback } from 'react'
 // MUI Imports
 import Card from '@mui/material/Card'
 import CardHeader from '@mui/material/CardHeader'
+import CardContent from '@mui/material/CardContent'
 import Divider from '@mui/material/Divider'
 import Button from '@mui/material/Button'
+import Box from '@mui/material/Box'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import Chip from '@mui/material/Chip'
 import IconButton from '@mui/material/IconButton'
 import TablePagination from '@mui/material/TablePagination'
+import useMediaQuery from '@mui/material/useMediaQuery'
+import CircularProgress from '@mui/material/CircularProgress'
 
 // Third-party Imports
 import classnames from 'classnames'
@@ -50,6 +54,7 @@ const LeagueList = () => {
   const [leagueToDelete, setLeagueToDelete] = useState(null)
   const [standingsModalOpen, setStandingsModalOpen] = useState(false)
   const [leagueForStandings, setLeagueForStandings] = useState(null)
+  const isMobile = useMediaQuery(theme => theme.breakpoints.down('md'))
 
   const fetchLeagues = useCallback(async () => {
     try {
@@ -253,51 +258,119 @@ const LeagueList = () => {
             }
           />
           <Divider />
-          <div className='overflow-x-auto'>
-            <table className={tableStyles.table}>
-              <thead>
-                {table.getHeaderGroups().map(headerGroup => (
-                  <tr key={headerGroup.id}>
-                    {headerGroup.headers.map(header => (
-                      <th key={header.id}>
-                        {header.isPlaceholder ? null : (
-                          <div
-                            className={classnames({ 'cursor-pointer select-none': header.column.getCanSort() })}
-                            onClick={header.column.getToggleSortingHandler()}
+          {loading ? (
+            <Box sx={{ p: 4, display: 'flex', justifyContent: 'center' }}>
+              <CircularProgress size={24} />
+            </Box>
+          ) : isMobile ? (
+            <div className='p-4 flex flex-col gap-4'>
+              {table.getFilteredRowModel().rows.length === 0 ? (
+                <Typography color='text.secondary' className='text-center py-8'>
+                  No leagues found
+                </Typography>
+              ) : (
+                table.getRowModel().rows.map(row => {
+                  const league = row.original
+                  const statusColor =
+                    league.status === 'active' ? 'success' : league.status === 'upcoming' ? 'info' : 'secondary'
+
+                  return (
+                    <Card key={league.id} elevation={0} variant='outlined' sx={{ borderRadius: 2, '&:hover': { boxShadow: 1 } }}>
+                      <CardContent>
+                        <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 1, mb: 2 }}>
+                          <Box>
+                            <Typography variant='subtitle1' fontWeight={600} color='text.primary'>
+                              {league.name}
+                            </Typography>
+                            <Typography variant='caption' color='text.secondary'>
+                              Season {league.season || '-'}
+                            </Typography>
+                          </Box>
+                          <Chip label={league.status} color={statusColor} size='small' variant='tonal' className='capitalize' />
+                        </Box>
+                        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                          <Button
+                            size='small'
+                            variant='outlined'
+                            startIcon={<i className='ri-bar-chart-box-line' />}
+                            onClick={() => {
+                              setLeagueForStandings(league)
+                              setStandingsModalOpen(true)
+                            }}
                           >
-                            {flexRender(header.column.columnDef.header, header.getContext())}
-                          </div>
-                        )}
-                      </th>
-                    ))}
-                  </tr>
-                ))}
-              </thead>
-              <tbody>
-                {loading ? (
-                  <tr>
-                    <td colSpan={columns.length} className='text-center'>
-                      Loading...
-                    </td>
-                  </tr>
-                ) : table.getFilteredRowModel().rows.length === 0 ? (
-                  <tr>
-                    <td colSpan={columns.length} className='text-center'>
-                      No leagues found
-                    </td>
-                  </tr>
-                ) : (
-                  table.getRowModel().rows.map(row => (
-                    <tr key={row.id}>
-                      {row.getVisibleCells().map(cell => (
-                        <td key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</td>
+                            Standings
+                          </Button>
+                          <Button
+                            size='small'
+                            variant='outlined'
+                            startIcon={<i className='ri-edit-box-line' />}
+                            onClick={() => {
+                              setSelectedLeague(league)
+                              setEditDrawerOpen(true)
+                            }}
+                          >
+                            Edit
+                          </Button>
+                          <Button
+                            size='small'
+                            variant='outlined'
+                            color='error'
+                            startIcon={<i className='ri-delete-bin-7-line' />}
+                            onClick={() => {
+                              setLeagueToDelete(league)
+                              setDeleteDialogOpen(true)
+                            }}
+                          >
+                            Delete
+                          </Button>
+                        </Box>
+                      </CardContent>
+                    </Card>
+                  )
+                })
+              )}
+            </div>
+          ) : (
+            <div className='overflow-x-auto'>
+              <table className={tableStyles.table}>
+                <thead>
+                  {table.getHeaderGroups().map(headerGroup => (
+                    <tr key={headerGroup.id}>
+                      {headerGroup.headers.map(header => (
+                        <th key={header.id}>
+                          {header.isPlaceholder ? null : (
+                            <div
+                              className={classnames({ 'cursor-pointer select-none': header.column.getCanSort() })}
+                              onClick={header.column.getToggleSortingHandler()}
+                            >
+                              {flexRender(header.column.columnDef.header, header.getContext())}
+                            </div>
+                          )}
+                        </th>
                       ))}
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                  ))}
+                </thead>
+                <tbody>
+                  {table.getFilteredRowModel().rows.length === 0 ? (
+                    <tr>
+                      <td colSpan={columns.length} className='text-center'>
+                        No leagues found
+                      </td>
+                    </tr>
+                  ) : (
+                    table.getRowModel().rows.map(row => (
+                      <tr key={row.id}>
+                        {row.getVisibleCells().map(cell => (
+                          <td key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</td>
+                        ))}
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
           <TablePagination
             rowsPerPageOptions={[5, 10, 25]}
             component='div'

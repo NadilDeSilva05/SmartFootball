@@ -16,6 +16,10 @@ import TableContainer from '@mui/material/TableContainer'
 import TableHead from '@mui/material/TableHead'
 import TableRow from '@mui/material/TableRow'
 import Typography from '@mui/material/Typography'
+import useMediaQuery from '@mui/material/useMediaQuery'
+import Card from '@mui/material/Card'
+import CardContent from '@mui/material/CardContent'
+import Chip from '@mui/material/Chip'
 
 export default function StandingsModal ({ open, onClose, league }) {
   const [tabValue, setTabValue] = useState(0)
@@ -24,6 +28,7 @@ export default function StandingsModal ({ open, onClose, league }) {
   const [loading, setLoading] = useState(false)
   const [topAssists] = useState([])
   const leagueId = league?.id
+  const isMobile = useMediaQuery(theme => theme.breakpoints.down('md'))
 
   const fetchStandings = useCallback(async () => {
     if (!leagueId || !open) return
@@ -81,6 +86,31 @@ export default function StandingsModal ({ open, onClose, league }) {
       </Tabs>
       <DialogContent sx={{ p: 0 }}>
         {tabValue === 0 && (
+          isMobile ? (
+            <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+              {loading ? (
+                <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
+                  <CircularProgress size={32} />
+                </Box>
+              ) : standings.length === 0 ? (
+                <Typography align='center' sx={{ py: 4 }}>No standings data for this league.</Typography>
+              ) : (
+                standings.map(row => (
+                  <Card key={row.clubId || row.team || row.position} elevation={0} variant='outlined'>
+                    <CardContent>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, alignItems: 'center' }}>
+                        <Typography fontWeight={700}>#{row.position} {row.team}</Typography>
+                        <Chip label={`${row.points} pts`} color='primary' size='small' variant='tonal' />
+                      </Box>
+                      <Typography variant='caption' color='text.secondary' sx={{ display: 'block', mt: 0.75 }}>
+                        P {row.played} | W {row.won} | D {row.draw} | L {row.lost} | GF {row.goalsFor} | GA {row.goalsAgainst} | GD {row.goalDiff > 0 ? '+' : ''}{row.goalDiff}
+                      </Typography>
+                    </CardContent>
+                  </Card>
+                ))
+              )}
+            </Box>
+          ) : (
           <TableContainer sx={{ maxHeight: 440 }}>
             {loading ? (
               <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', py: 6 }}>
@@ -133,8 +163,30 @@ export default function StandingsModal ({ open, onClose, league }) {
             </Table>
             )}
           </TableContainer>
+          )
         )}
         {tabValue === 1 && (
+          isMobile ? (
+            <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+              {topScorers.length === 0 ? (
+                <Typography align='center' sx={{ py: 4 }}>No top scorers data for this league.</Typography>
+              ) : (
+                topScorers.map(row => (
+                  <Card key={`${row.player}-${row.team}`} elevation={0} variant='outlined'>
+                    <CardContent>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, alignItems: 'center' }}>
+                        <Typography fontWeight={600}>#{row.position} {row.player}</Typography>
+                        <Chip label={`${row.goals} goals`} color='success' size='small' variant='tonal' />
+                      </Box>
+                      <Typography variant='body2' color='text.secondary' sx={{ mt: 0.75 }}>
+                        {row.team}
+                      </Typography>
+                    </CardContent>
+                  </Card>
+                ))
+              )}
+            </Box>
+          ) : (
           <TableContainer sx={{ maxHeight: 440 }}>
             <Table stickyHeader size='small'>
               <TableHead>
@@ -169,8 +221,30 @@ export default function StandingsModal ({ open, onClose, league }) {
               </TableBody>
             </Table>
           </TableContainer>
+          )
         )}
         {tabValue === 2 && (
+          isMobile ? (
+            <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+              {topAssists.length === 0 ? (
+                <Typography align='center' sx={{ py: 4 }}>No assists data for this league.</Typography>
+              ) : (
+                topAssists.map(row => (
+                  <Card key={`${row.player}-${row.team}`} elevation={0} variant='outlined'>
+                    <CardContent>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, alignItems: 'center' }}>
+                        <Typography fontWeight={600}>#{row.position} {row.player}</Typography>
+                        <Chip label={`${row.assists} assists`} color='info' size='small' variant='tonal' />
+                      </Box>
+                      <Typography variant='body2' color='text.secondary' sx={{ mt: 0.75 }}>
+                        {row.team}
+                      </Typography>
+                    </CardContent>
+                  </Card>
+                ))
+              )}
+            </Box>
+          ) : (
           <TableContainer sx={{ maxHeight: 440 }}>
             <Table stickyHeader size='small'>
               <TableHead>
@@ -205,6 +279,7 @@ export default function StandingsModal ({ open, onClose, league }) {
               </TableBody>
             </Table>
           </TableContainer>
+          )
         )}
       </DialogContent>
     </Dialog>
