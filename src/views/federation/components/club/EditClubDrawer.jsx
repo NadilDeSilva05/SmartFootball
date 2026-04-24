@@ -11,6 +11,7 @@ import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import CircularProgress from '@mui/material/CircularProgress'
 import Alert from '@mui/material/Alert'
+import { notifyError, notifySuccess } from '@/utils/toast'
 
 const fileToBase64 = file =>
   new Promise((resolve, reject) => {
@@ -92,13 +93,16 @@ export default function EditClubDrawer ({ open, onClose, club, onSuccess }) {
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
         setSubmitError(data?.error || 'Failed to update club')
+        notifyError(data?.error || 'Failed to update club')
         return
       }
 
+      notifySuccess('Club updated successfully.')
       onClose()
       onSuccess?.()
     } catch (err) {
       setSubmitError(err?.message || 'Failed to update club')
+      notifyError(err, 'Failed to update club')
     } finally {
       setSubmitting(false)
     }

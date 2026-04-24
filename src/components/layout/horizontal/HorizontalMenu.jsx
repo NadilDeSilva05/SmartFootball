@@ -14,7 +14,6 @@ import { useSelector } from 'react-redux'
 import HorizontalNav, { Menu, SubMenu, MenuItem } from '@menu/horizontal-menu'
 import VerticalNavContent from './VerticalNavContent'
 
-// import { GenerateHorizontalMenu } from '@components/GenerateMenu'
 // Hook Imports
 import useVerticalNav from '@menu/hooks/useVerticalNav'
 import { useSettings } from '@core/hooks/useSettings'

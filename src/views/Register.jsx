@@ -31,6 +31,7 @@ import themeConfig from '@configs/themeConfig'
 import { useImageVariant } from '@core/hooks/useImageVariant'
 
 import { requestSignUpFederationAdmin } from '@/redux/slices/authenticationSlice'
+import { notifyError, notifySuccess } from '@/utils/toast'
 
 const Register = ({ mode }) => {
   const router = useRouter()
@@ -75,10 +76,12 @@ const Register = ({ mode }) => {
   }
 
   const handleSignUpSuccess = () => {
+    notifySuccess('Account created successfully. You can now sign in.')
     router.push('/login')
   }
 
   const handleSignUpFailed = error => {
+    notifyError(error, 'Registration failed. Please try again.')
     setErrors(prev => ({
       ...prev,
       submit: error?.response?.data?.error || error?.message || 'Registration failed. Please try again.'

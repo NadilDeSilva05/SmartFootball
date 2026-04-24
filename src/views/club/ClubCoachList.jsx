@@ -33,6 +33,7 @@ import AddCoachDrawer from '@views/club/components/coach/AddCoachDrawer'
 import EditCoachDrawer from '@views/club/components/coach/EditCoachDrawer'
 import tableStyles from '@core/styles/table.module.css'
 import { LICENSE_OPTIONS, ROLE_OPTIONS } from '@views/club/constants'
+import { notifyError, notifySuccess } from '@/utils/toast'
 
 const columnHelper = createColumnHelper()
 
@@ -301,6 +302,7 @@ const ClubCoachList = () => {
         const payload = await res.json().catch(() => ({}))
         throw new Error(payload?.error || 'Failed to delete coach')
       }
+      notifySuccess('Coach deleted successfully.')
       setDeleteDialogOpen(false)
       setCoachToDelete(null)
       loadData()
@@ -308,6 +310,7 @@ const ClubCoachList = () => {
       setDeleteDialogOpen(false)
       setCoachToDelete(null)
       setError(e?.message || 'Failed to delete coach')
+      notifyError(e, 'Failed to delete coach')
     }
   }
 

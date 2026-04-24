@@ -37,6 +37,7 @@ import ConfirmationDialog from '@components/dialogs/confirmation-dialog'
 import AddRefereeDrawer from '@views/federation/components/referee/AddRefereeDrawer'
 import EditRefereeDrawer from '@views/federation/components/referee/EditRefereeDrawer'
 import { LICENSE_LEVEL_OPTIONS } from '@views/federation/constants'
+import { notifyError, notifySuccess } from '@/utils/toast'
 
 // Style Imports
 import tableStyles from '@core/styles/table.module.css'
@@ -196,11 +197,15 @@ const RefereeList = () => {
       const res = await fetch(`/api/referees/${refereeToDelete.id}`, { method: 'DELETE' })
       if (res.ok) {
         setData(prev => prev.filter(r => r.id !== refereeToDelete.id))
+        notifySuccess('Referee deleted successfully.')
         setDeleteDialogOpen(false)
         setRefereeToDelete(null)
+      } else {
+        const payload = await res.json().catch(() => ({}))
+        throw new Error(payload?.error || 'Failed to delete referee')
       }
-    } catch {
-      // ignore
+    } catch (error) {
+      notifyError(error, 'Failed to delete referee')
     } finally {
       setDeleting(false)
       setDeleteDialogOpen(false)

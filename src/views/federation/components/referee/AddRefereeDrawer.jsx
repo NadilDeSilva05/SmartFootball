@@ -16,6 +16,7 @@ import CircularProgress from '@mui/material/CircularProgress'
 import Alert from '@mui/material/Alert'
 import InputAdornment from '@mui/material/InputAdornment'
 import { LICENSE_LEVEL_OPTIONS } from '@views/federation/constants'
+import { notifyError, notifySuccess } from '@/utils/toast'
 
 export default function AddRefereeDrawer ({ open, onClose, onSuccess }) {
   const [formErrors, setFormErrors] = useState({})
@@ -87,13 +88,16 @@ export default function AddRefereeDrawer ({ open, onClose, onSuccess }) {
       const result = await res.json().catch(() => ({}))
       if (!res.ok) {
         setSubmitError(result?.error || 'Failed to create referee')
+        notifyError(result?.error || 'Failed to create referee')
         return
       }
+      notifySuccess('Referee created successfully.')
       resetForm()
       onClose()
       onSuccess?.()
     } catch (err) {
       setSubmitError(err?.message || 'Failed to create referee')
+      notifyError(err, 'Failed to create referee')
     } finally {
       setSubmitting(false)
     }

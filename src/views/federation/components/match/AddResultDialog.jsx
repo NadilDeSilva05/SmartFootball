@@ -18,6 +18,7 @@ import Select from '@mui/material/Select'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import { GOAL_TYPES, REFEREE_ROLES } from '@views/federation/constants'
+import { notifyError, notifySuccess } from '@/utils/toast'
 
 /** @param {Record<string, unknown>} match */
 function getMainRefereeId (match) {
@@ -226,9 +227,11 @@ export default function AddResultDialog ({ open, onClose, onSave, scheduledMatch
         cards: []
       })
       setFormErrors({})
+      notifySuccess('Match result saved successfully.')
       onSave()
     } catch (err) {
       setError(err.message || 'Failed to save result')
+      notifyError(err, 'Failed to save match result')
     } finally {
       setSaving(false)
     }

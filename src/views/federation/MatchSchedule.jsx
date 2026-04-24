@@ -35,6 +35,7 @@ import HorizontalWithSubtitle from '@components/card-statistics/HorizontalWithSu
 import ConfirmationDialog from '@components/dialogs/confirmation-dialog'
 import AddMatchDrawer from '@views/federation/components/match/AddMatchDrawer'
 import EditMatchDrawer from '@views/federation/components/match/EditMatchDrawer'
+import { notifyError, notifySuccess } from '@/utils/toast'
 
 // Style Imports
 import tableStyles from '@core/styles/table.module.css'
@@ -228,11 +229,15 @@ const MatchSchedule = () => {
       const res = await fetch(`/api/matches/${matchToDelete.id}`, { method: 'DELETE' })
       if (res.ok) {
         setRawMatches(prev => prev.filter(m => m.id !== matchToDelete.id))
+        notifySuccess('Match deleted successfully.')
         setDeleteDialogOpen(false)
         setMatchToDelete(null)
+      } else {
+        const payload = await res.json().catch(() => ({}))
+        throw new Error(payload?.error || 'Failed to delete match')
       }
-    } catch {
-      // ignore
+    } catch (error) {
+      notifyError(error, 'Failed to delete match')
     }
     setDeleteDialogOpen(false)
     setMatchToDelete(null)

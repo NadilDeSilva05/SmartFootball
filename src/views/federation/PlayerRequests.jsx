@@ -29,6 +29,7 @@ import useMediaQuery from '@mui/material/useMediaQuery'
 
 // Component Imports
 import HorizontalWithSubtitle from '@components/card-statistics/HorizontalWithSubtitle'
+import { notifyError, notifySuccess } from '@/utils/toast'
 
 const dateText = value => (value ? value.slice(0, 10) : '-')
 
@@ -109,9 +110,11 @@ const PlayerRequests = () => {
       })
       const payload = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(payload?.error || 'Failed to approve request')
+      notifySuccess('Player request approved successfully.')
       loadData()
     } catch (e) {
       setError(e?.message || 'Failed to approve request')
+      notifyError(e, 'Failed to approve player request')
     } finally {
       setReviewSubmitting(false)
     }
@@ -130,12 +133,14 @@ const PlayerRequests = () => {
       const payload = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(payload?.error || 'Failed to reject request')
 
+      notifySuccess('Player request rejected successfully.')
       setRejectDialogOpen(false)
       setSelectedRequest(null)
       setRejectReason('')
       loadData()
     } catch (e) {
       setError(e?.message || 'Failed to reject request')
+      notifyError(e, 'Failed to reject player request')
     } finally {
       setReviewSubmitting(false)
     }
