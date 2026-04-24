@@ -40,6 +40,7 @@ import ConfirmationDialog from '@components/dialogs/confirmation-dialog'
 import AddPlayerDrawer from '@views/club/components/player/AddPlayerDrawer'
 import EditPlayerDrawer from '@views/club/components/player/EditPlayerDrawer'
 import PlayerIdCardDialog from '@views/club/components/player/PlayerIdCardDialog'
+import { notifyError, notifySuccess } from '@/utils/toast'
 
 // Style Imports
 import tableStyles from '@core/styles/table.module.css'
@@ -337,6 +338,7 @@ const ClubPlayerList = () => {
         const payload = await res.json().catch(() => ({}))
         throw new Error(payload?.error || 'Failed to delete player')
       }
+      notifySuccess('Player deleted successfully.')
       setDeleteDialogOpen(false)
       setPlayerToDelete(null)
       loadData()
@@ -344,6 +346,7 @@ const ClubPlayerList = () => {
       setDeleteDialogOpen(false)
       setPlayerToDelete(null)
       setError(e?.message || 'Failed to delete player')
+      notifyError(e, 'Failed to delete player')
     }
   }
 

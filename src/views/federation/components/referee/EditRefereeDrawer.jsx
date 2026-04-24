@@ -14,6 +14,7 @@ import Typography from '@mui/material/Typography'
 import CircularProgress from '@mui/material/CircularProgress'
 import Alert from '@mui/material/Alert'
 import { LICENSE_LEVEL_OPTIONS } from '@views/federation/constants'
+import { notifyError, notifySuccess } from '@/utils/toast'
 
 export default function EditRefereeDrawer ({ open, onClose, referee, onSuccess }) {
   const [formData, setFormData] = useState({
@@ -68,12 +69,15 @@ export default function EditRefereeDrawer ({ open, onClose, referee, onSuccess }
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
         setSubmitError(data?.error || 'Failed to update referee')
+        notifyError(data?.error || 'Failed to update referee')
         return
       }
+      notifySuccess('Referee updated successfully.')
       onClose()
       onSuccess?.()
     } catch (err) {
       setSubmitError(err?.message || 'Failed to update referee')
+      notifyError(err, 'Failed to update referee')
     } finally {
       setSubmitting(false)
     }

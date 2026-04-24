@@ -9,6 +9,7 @@ import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import CircularProgress from '@mui/material/CircularProgress'
 import Alert from '@mui/material/Alert'
+import { notifyError, notifySuccess } from '@/utils/toast'
 
 export default function EditLeagueDrawer ({ open, onClose, league, onSuccess }) {
   const [formData, setFormData] = useState({ name: '', season: '', status: 'active' })
@@ -44,12 +45,15 @@ export default function EditLeagueDrawer ({ open, onClose, league, onSuccess }) 
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
         setSubmitError(data?.error || 'Failed to update league')
+        notifyError(data?.error || 'Failed to update league')
         return
       }
+      notifySuccess('League updated successfully.')
       onClose()
       onSuccess?.()
     } catch (err) {
       setSubmitError(err?.message || 'Failed to update league')
+      notifyError(err, 'Failed to update league')
     } finally {
       setSubmitting(false)
     }

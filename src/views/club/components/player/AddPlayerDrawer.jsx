@@ -15,6 +15,7 @@ import Box from '@mui/material/Box'
 import Alert from '@mui/material/Alert'
 import CircularProgress from '@mui/material/CircularProgress'
 import { POSITION_OPTIONS } from '@views/club/constants'
+import { notifyError, notifySuccess } from '@/utils/toast'
 
 export default function AddPlayerDrawer ({ open, onClose, clubId, onRequestSent }) {
   const [formData, setFormData] = useState({
@@ -134,11 +135,13 @@ export default function AddPlayerDrawer ({ open, onClose, clubId, onRequestSent 
         throw new Error(payload?.error || 'Failed to submit player request')
       }
 
+      notifySuccess('Player request sent to federation successfully.')
       onRequestSent?.()
       resetForm()
       onClose?.()
     } catch (error) {
       setSubmitError(error?.message || 'Failed to submit player request')
+      notifyError(error, 'Failed to submit player request')
     } finally {
       setSubmitting(false)
     }

@@ -37,6 +37,7 @@ import HorizontalWithSubtitle from '@components/card-statistics/HorizontalWithSu
 import ConfirmationDialog from '@components/dialogs/confirmation-dialog'
 import AddClubDrawer from '@views/federation/components/club/AddClubDrawer'
 import EditClubDrawer from '@views/federation/components/club/EditClubDrawer'
+import { notifyError, notifySuccess } from '@/utils/toast'
 
 // Style Imports
 import tableStyles from '@core/styles/table.module.css'
@@ -249,10 +250,12 @@ const ClubList = () => {
       const res = await fetch(`/api/clubs/${clubToDelete.id}`, { method: 'DELETE' })
       if (!res.ok) throw new Error('Delete failed')
       await fetchClubs()
+      notifySuccess('Club deleted successfully.')
       setDeleteDialogOpen(false)
       setClubToDelete(null)
     } catch (e) {
       setError(e.message)
+      notifyError(e, 'Failed to delete club')
     } finally {
       setDeleting(false)
     }

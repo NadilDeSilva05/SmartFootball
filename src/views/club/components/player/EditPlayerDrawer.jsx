@@ -14,6 +14,7 @@ import MenuItem from '@mui/material/MenuItem'
 import Alert from '@mui/material/Alert'
 import CircularProgress from '@mui/material/CircularProgress'
 import { POSITION_OPTIONS } from '@views/club/constants'
+import { notifyError, notifySuccess } from '@/utils/toast'
 
 export default function EditPlayerDrawer ({ open, onClose, player, onSaved }) {
   const [formData, setFormData] = useState({
@@ -74,10 +75,12 @@ export default function EditPlayerDrawer ({ open, onClose, player, onSaved }) {
         throw new Error(payload?.error || 'Failed to update player')
       }
 
+      notifySuccess('Player updated successfully.')
       onSaved?.()
       onClose?.()
     } catch (err) {
       setError(err?.message || 'Failed to update player')
+      notifyError(err, 'Failed to update player')
     } finally {
       setSaving(false)
     }

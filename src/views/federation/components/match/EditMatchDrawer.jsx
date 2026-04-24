@@ -13,6 +13,7 @@ import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import CircularProgress from '@mui/material/CircularProgress'
 import Alert from '@mui/material/Alert'
+import { notifyError, notifySuccess } from '@/utils/toast'
 
 export default function EditMatchDrawer ({ open, onClose, match, onSuccess, leagues = [], clubs = [] }) {
   const [formData, setFormData] = useState({ league: '', homeTeam: '', awayTeam: '', venue: '', date: '', time: '' })
@@ -54,12 +55,15 @@ export default function EditMatchDrawer ({ open, onClose, match, onSuccess, leag
       const result = await res.json().catch(() => ({}))
       if (!res.ok) {
         setSubmitError(result?.error || 'Failed to update match')
+        notifyError(result?.error || 'Failed to update match')
         return
       }
+      notifySuccess('Match updated successfully.')
       onClose()
       onSuccess?.()
     } catch (err) {
       setSubmitError(err?.message || 'Failed to update match')
+      notifyError(err, 'Failed to update match')
     } finally {
       setSubmitting(false)
     }

@@ -14,6 +14,7 @@ import MenuItem from '@mui/material/MenuItem'
 import Alert from '@mui/material/Alert'
 import CircularProgress from '@mui/material/CircularProgress'
 import { LICENSE_OPTIONS, ROLE_OPTIONS } from '@views/club/constants'
+import { notifyError, notifySuccess } from '@/utils/toast'
 
 export default function EditCoachDrawer ({ open, onClose, coach, onSaved }) {
   const [formData, setFormData] = useState({ coachId: '', fullName: '', role: 'assistant_coach', license: 'C', nicOrPassport: '', dateOfBirth: '' })
@@ -64,10 +65,12 @@ export default function EditCoachDrawer ({ open, onClose, coach, onSaved }) {
         throw new Error(payload?.error || 'Failed to update coach')
       }
 
+      notifySuccess('Coach updated successfully.')
       onSaved?.()
       onClose?.()
     } catch (error) {
       setSubmitError(error?.message || 'Failed to update coach')
+      notifyError(error, 'Failed to update coach')
     } finally {
       setSubmitting(false)
     }

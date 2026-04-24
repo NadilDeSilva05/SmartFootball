@@ -27,7 +27,12 @@ const Providers = async props => {
       <SettingsProvider settingsCookie={settingsCookie} mode={mode} demoName={demoName}>
         <ThemeProvider direction={direction} systemMode={systemMode}>
           {children}
-          <AppReactToastify position={themeConfig.toastPosition} hideProgressBar rtl={direction === 'rtl'} />
+          <AppReactToastify
+            position={themeConfig.toastPosition}
+            autoClose={themeConfig.toastAutoClose}
+            hideProgressBar
+            rtl={direction === 'rtl'}
+          />
         </ThemeProvider>
       </SettingsProvider>
     </VerticalNavProvider>

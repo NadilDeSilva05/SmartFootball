@@ -25,6 +25,7 @@ import { useSelector, useDispatch } from 'react-redux'
 import { signOut } from 'firebase/auth'
 import { logout } from '@/redux/slices/authenticationSlice'
 import { getFirebaseAuth } from '@/lib/firebase-client'
+import { notifySuccess } from '@/utils/toast'
 
 // Styled component for badge content
 const BadgeContentSpan = styled('span')({
@@ -79,6 +80,7 @@ const UserDropdown = () => {
       }
     }
     dispatch(logout())
+    notifySuccess('Logged out successfully.')
     router.push('/login')
   }
 

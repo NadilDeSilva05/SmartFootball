@@ -37,6 +37,7 @@ import ConfirmationDialog from '@components/dialogs/confirmation-dialog'
 import StandingsModal from '@views/federation/components/league/StandingsModal'
 import AddLeagueDrawer from '@views/federation/components/league/AddLeagueDrawer'
 import EditLeagueDrawer from '@views/federation/components/league/EditLeagueDrawer'
+import { notifyError, notifySuccess } from '@/utils/toast'
 
 // Style Imports
 import tableStyles from '@core/styles/table.module.css'
@@ -210,11 +211,15 @@ const LeagueList = () => {
       const res = await fetch(`/api/leagues/${leagueToDelete.id}`, { method: 'DELETE' })
       if (res.ok) {
         setData(prev => prev.filter(l => l.id !== leagueToDelete.id))
+        notifySuccess('League deleted successfully.')
         setDeleteDialogOpen(false)
         setLeagueToDelete(null)
+      } else {
+        const payload = await res.json().catch(() => ({}))
+        throw new Error(payload?.error || 'Failed to delete league')
       }
-    } catch {
-      // ignore
+    } catch (error) {
+      notifyError(error, 'Failed to delete league')
     } finally {
       setDeleteDialogOpen(false)
       setLeagueToDelete(null)

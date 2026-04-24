@@ -34,6 +34,7 @@ import { useImageVariant } from '@core/hooks/useImageVariant'
 
 // Redux Actions
 import { requestSignIn, ROLE_REDIRECT_MAP } from '@/redux/slices/authenticationSlice'
+import { notifyError, notifySuccess } from '@/utils/toast'
 
 const Login = ({ mode }) => {
   const [isPasswordShown, setIsPasswordShown] = useState(false)
@@ -60,6 +61,7 @@ const Login = ({ mode }) => {
     const handleLoginFailCallback = error => {
       setSubmitting(false)
       setErrors({ submit: error?.message || 'Login failed' })
+      notifyError(error, 'Login failed')
     }
 
     try {
@@ -76,15 +78,18 @@ const Login = ({ mode }) => {
         const userRole = result.payload?.user?.role || result.payload?.user?.accountRole
         const redirectTo = searchParams.get('redirectTo')
         const targetUrl = redirectTo || ROLE_REDIRECT_MAP[userRole] || '/dashboard'
+        notifySuccess('Signed in successfully.')
         await new Promise(resolve => setTimeout(resolve, 300))
         router.push(targetUrl)
       } else {
         setSubmitting(false)
         setErrors({ submit: 'Login failed. Please try again.' })
+        notifyError('Login failed. Please try again.')
       }
     } catch (err) {
       setSubmitting(false)
       setErrors({ submit: err?.message || 'Login failed. Please try again.' })
+      notifyError(err, 'Login failed. Please try again.')
     }
   }
 

@@ -33,6 +33,7 @@ import {
 import OptionMenu from '@core/components/option-menu'
 import HorizontalWithSubtitle from '@components/card-statistics/HorizontalWithSubtitle'
 import AssignRefereesDrawer from '@views/federation/components/match/AssignRefereesDrawer'
+import { notifyError, notifySuccess } from '@/utils/toast'
 
 // Style Imports
 import tableStyles from '@core/styles/table.module.css'
@@ -260,11 +261,15 @@ const MatchAssignReferees = () => {
         setRawMatches(prev => prev.map(m => m.id === selectedMatch.id
           ? { ...m, referees: { mainReferee: formData.mainReferee, assistant1: formData.assistant1, assistant2: formData.assistant2, fourthOfficial: formData.fourthOfficial } }
           : m))
+        notifySuccess('Referee assignment saved successfully.')
         setDrawerOpen(false)
         setSelectedMatch(null)
+      } else {
+        const payload = await res.json().catch(() => ({}))
+        throw new Error(payload?.error || 'Failed to save referee assignment')
       }
-    } catch {
-      // ignore
+    } catch (error) {
+      notifyError(error, 'Failed to save referee assignment')
     }
   }
 

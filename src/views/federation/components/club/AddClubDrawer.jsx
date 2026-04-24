@@ -16,6 +16,7 @@ import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import CircularProgress from '@mui/material/CircularProgress'
 import Alert from '@mui/material/Alert'
+import { notifyError, notifySuccess } from '@/utils/toast'
 
 const fileToBase64 = file =>
   new Promise((resolve, reject) => {
@@ -125,14 +126,17 @@ export default function AddClubDrawer ({ open, onClose, onSuccess, leagues = [] 
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
         setSubmitError(data?.error || 'Failed to create club')
+        notifyError(data?.error || 'Failed to create club')
         return
       }
 
+      notifySuccess('Club created successfully.')
       resetForm()
       onClose()
       onSuccess?.()
     } catch (err) {
       setSubmitError(err?.message || 'Failed to create club')
+      notifyError(err, 'Failed to create club')
     } finally {
       setSubmitting(false)
     }

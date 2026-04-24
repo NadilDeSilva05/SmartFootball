@@ -25,6 +25,7 @@ import Divider from '@mui/material/Divider'
 import useMediaQuery from '@mui/material/useMediaQuery'
 import HorizontalWithSubtitle from '@components/card-statistics/HorizontalWithSubtitle'
 import { LICENSE_OPTIONS, ROLE_OPTIONS } from '@views/club/constants'
+import { notifyError, notifySuccess } from '@/utils/toast'
 
 const dateText = value => (value ? value.slice(0, 10) : '-')
 
@@ -105,9 +106,11 @@ const CoachRequests = () => {
       })
       const payload = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(payload?.error || 'Failed to approve request')
+      notifySuccess('Coach request approved successfully.')
       loadData()
     } catch (e) {
       setError(e?.message || 'Failed to approve request')
+      notifyError(e, 'Failed to approve coach request')
     } finally {
       setReviewSubmitting(false)
     }
@@ -126,12 +129,14 @@ const CoachRequests = () => {
       const payload = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(payload?.error || 'Failed to reject request')
 
+      notifySuccess('Coach request rejected successfully.')
       setRejectDialogOpen(false)
       setSelectedRequest(null)
       setRejectReason('')
       loadData()
     } catch (e) {
       setError(e?.message || 'Failed to reject request')
+      notifyError(e, 'Failed to reject coach request')
     } finally {
       setReviewSubmitting(false)
     }

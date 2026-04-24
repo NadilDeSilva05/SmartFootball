@@ -14,6 +14,7 @@ import MenuItem from '@mui/material/MenuItem'
 import Alert from '@mui/material/Alert'
 import CircularProgress from '@mui/material/CircularProgress'
 import { LICENSE_OPTIONS, ROLE_OPTIONS } from '@views/club/constants'
+import { notifyError, notifySuccess } from '@/utils/toast'
 
 export default function AddCoachDrawer ({ open, onClose, clubId, onRequestSent }) {
   const [formData, setFormData] = useState({
@@ -77,11 +78,13 @@ export default function AddCoachDrawer ({ open, onClose, clubId, onRequestSent }
         throw new Error(payload?.error || 'Failed to submit coach request')
       }
 
+      notifySuccess('Coach request sent to federation successfully.')
       onRequestSent?.()
       resetForm()
       onClose?.()
     } catch (error) {
       setSubmitError(error?.message || 'Failed to submit coach request')
+      notifyError(error, 'Failed to submit coach request')
     } finally {
       setSubmitting(false)
     }

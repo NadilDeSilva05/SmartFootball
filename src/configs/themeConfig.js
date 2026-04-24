@@ -38,7 +38,8 @@ const themeConfig = {
     detached: true //! true, false (This will not work in the Horizontal Layout)
   },
   disableRipple: false,
-  toastPosition: 'top-right' // 'top-right', 'top-center', 'top-left', 'bottom-right', 'bottom-center', 'bottom-left'
+  toastPosition: 'top-right', // 'top-right', 'top-center', 'top-left', 'bottom-right', 'bottom-center', 'bottom-left'
+  toastAutoClose: 8000 // ms; default react-toastify is 5000
 }
 
 export default themeConfig

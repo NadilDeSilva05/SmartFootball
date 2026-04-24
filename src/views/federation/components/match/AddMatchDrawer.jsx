@@ -14,6 +14,7 @@ import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import CircularProgress from '@mui/material/CircularProgress'
 import Alert from '@mui/material/Alert'
+import { notifyError, notifySuccess } from '@/utils/toast'
 
 export default function AddMatchDrawer ({ open, onClose, onSuccess, leagues = [], clubs = [] }) {
   const [formErrors, setFormErrors] = useState({})
@@ -67,14 +68,17 @@ export default function AddMatchDrawer ({ open, onClose, onSuccess, leagues = []
       const result = await res.json().catch(() => ({}))
       if (!res.ok) {
         setSubmitError(result?.error || 'Failed to create match')
+        notifyError(result?.error || 'Failed to create match')
         return
       }
+      notifySuccess('Match scheduled successfully.')
       setFormData({ league: '', homeTeam: '', awayTeam: '', venue: '', date: '', time: '' })
       setFormErrors({})
       onClose()
       onSuccess?.()
     } catch (err) {
       setSubmitError(err?.message || 'Failed to create match')
+      notifyError(err, 'Failed to create match')
     } finally {
       setSubmitting(false)
     }

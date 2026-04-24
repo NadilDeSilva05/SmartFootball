@@ -9,6 +9,7 @@ import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import CircularProgress from '@mui/material/CircularProgress'
 import Alert from '@mui/material/Alert'
+import { notifyError, notifySuccess } from '@/utils/toast'
 
 export default function AddLeagueDrawer ({ open, onClose, onSuccess }) {
   const [formData, setFormData] = useState({ name: '', season: '2024-25', status: 'active' })
@@ -33,13 +34,16 @@ export default function AddLeagueDrawer ({ open, onClose, onSuccess }) {
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
         setSubmitError(data?.error || 'Failed to create league')
+        notifyError(data?.error || 'Failed to create league')
         return
       }
+      notifySuccess('League created successfully.')
       setFormData({ name: '', season: '2024-25', status: 'active' })
       onClose()
       onSuccess?.()
     } catch (err) {
       setSubmitError(err?.message || 'Failed to create league')
+      notifyError(err, 'Failed to create league')
     } finally {
       setSubmitting(false)
     }
