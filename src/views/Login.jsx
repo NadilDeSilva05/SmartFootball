@@ -179,12 +179,7 @@ const Login = ({ mode }) => {
                   }}
                 />
 
-                <div className='flex justify-between items-center gap-x-3 gap-y-1 flex-wrap'>
-                  <FormControlLabel control={<Checkbox defaultChecked />} label='Remember me' />
-                  <Typography className='text-end' color='primary' component={Link} href='/forgot-password'>
-                    Forgot password?
-                  </Typography>
-                </div>
+                <FormControlLabel control={<Checkbox defaultChecked />} label='Remember me' />
 
                 {errors.submit && (
                   <Alert severity='error' sx={{ mt: 1 }}>

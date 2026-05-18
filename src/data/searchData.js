@@ -2,7 +2,6 @@
 const data = [
   { id: 'sf-1', name: 'Login', url: '/login', icon: 'ri-login-box-line', section: 'Auth' },
   { id: 'sf-2', name: 'Register', url: '/register', icon: 'ri-user-add-line', section: 'Auth' },
-  { id: 'sf-3', name: 'Forgot password', url: '/forgot-password', icon: 'ri-lock-password-line', section: 'Auth' },
   { id: 'sf-4', name: 'Federation dashboard', url: '/federation', icon: 'ri-dashboard-line', section: 'Federation' },
   { id: 'sf-5', name: 'Clubs', url: '/federation/clubs', icon: 'ri-building-line', section: 'Federation' },
   { id: 'sf-6', name: 'Referees', url: '/federation/referees', icon: 'ri-user-star-line', section: 'Federation' },
