@@ -131,8 +131,6 @@ const CoachPerformanceHistory = () => {
                     <Box sx={{ display: 'grid', gap: 0.75 }}>
                       <Typography variant='body2' color='text.secondary'>Minutes: {s.minutesPlayed}</Typography>
                       <Typography variant='body2' color='text.secondary'>Heart Rate: {s.heartRate} bpm</Typography>
-                      <Typography variant='body2' color='text.secondary'>Player Load: {s.playerLoad?.toFixed(1)}</Typography>
-                      <Typography variant='body2' color='text.secondary'>Sprints: {s.sprintCount}</Typography>
                       <Typography variant='body2' color='text.secondary'>High-Intensity Distance: {s.highIntensityDist}</Typography>
                       <Typography variant='body2' color='text.secondary'>Work Rate: {s.workRate}</Typography>
                       <Typography variant='body2' color='text.secondary'>Ended: {s.endedAt ? new Date(s.endedAt).toLocaleString() : 'â€“'}</Typography>
@@ -151,8 +149,6 @@ const CoachPerformanceHistory = () => {
                   <TableCell align='center'>Minutes</TableCell>
                   <TableCell align='center'>Heart Rate</TableCell>
                   <TableCell align='center'>Fatigue</TableCell>
-                  <TableCell align='center'>Player Load</TableCell>
-                  <TableCell align='center'>Sprints</TableCell>
                   <TableCell align='center'>High-Int. Dist. (m)</TableCell>
                   <TableCell align='center'>Work Rate</TableCell>
                   <TableCell>Ended at</TableCell>
@@ -173,8 +169,6 @@ const CoachPerformanceHistory = () => {
                     <TableCell align='center'>
                       <Chip size='small' label={s.fatigueLevel} color={s.fatigueLevel === 'High' ? 'error' : s.fatigueLevel === 'Medium' ? 'warning' : 'success'} variant='outlined' />
                     </TableCell>
-                    <TableCell align='center'>{s.playerLoad?.toFixed(1)}</TableCell>
-                    <TableCell align='center'>{s.sprintCount}</TableCell>
                     <TableCell align='center'>{s.highIntensityDist}</TableCell>
                     <TableCell align='center'>{s.workRate}</TableCell>
                     <TableCell>

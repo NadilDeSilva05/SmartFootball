@@ -148,8 +148,6 @@ const LiveMatchDashboard = () => {
       heartRate: p.heartRate,
       heartRateInstant: p.heartRateInstant,
       fatigueLevel: p.fatigueLevel,
-      playerLoad: p.playerLoad,
-      sprintCount: p.sprintCount,
       highIntensityDist: p.highIntensityDist,
       workRate: p.workRate,
       minutesPlayed: elapsedMinutes,
