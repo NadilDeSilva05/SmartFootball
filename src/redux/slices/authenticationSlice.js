@@ -129,39 +129,6 @@ export const requestSignUpFederationAdmin = createAsyncThunk(
   }
 )
 
-export const requestSignUp = createAsyncThunk(
-  'authentication/requestSignUp',
-  async (
-    { requestBody, handleSuccessCallback, handleFailedCallback },
-    { rejectWithValue }
-  ) => {
-    try {
-      const res = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: requestBody.email,
-          password: requestBody.password,
-          fullName: [requestBody.firstName, requestBody.lastName].filter(Boolean).join(' ').trim() || requestBody.email?.split('@')[0],
-          role: requestBody.role || ROLES.PLAYER
-        })
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        const err = new Error(data?.error || 'Registration failed')
-        err.response = { data }
-        handleFailedCallback?.(err)
-        return rejectWithValue(err)
-      }
-      handleSuccessCallback?.()
-      return data
-    } catch (error) {
-      handleFailedCallback?.(error)
-      return rejectWithValue(error)
-    }
-  }
-)
-
 export const syncAuthSession = createAsyncThunk(
   'authentication/syncAuthSession',
   async ({ firebaseUser, forceRefresh = false } = {}, { rejectWithValue }) => {
@@ -191,9 +158,7 @@ const initialState = {
     token: null,
     user: {}
   },
-  isSignInLoading: false,
-  isSignUpLoading: false,
-  authInitialized: false
+  isSignUpLoading: false
 }
 
 const authenticationSlice = createSlice({
@@ -202,44 +167,15 @@ const authenticationSlice = createSlice({
   reducers: {
     logout: state => {
       state.loginData = { token: null, user: {} }
-      state.authInitialized = true
-    },
-    setLoginData: (state, action) => {
-      state.loginData = {
-        token: action.payload?.token || null,
-        user: action.payload?.user || {}
-      }
-      state.authInitialized = true
-    },
-    markAuthInitialized: state => {
-      state.authInitialized = true
     }
   },
   extraReducers: builder => {
     builder
-      .addCase(requestSignIn.pending, state => {
-        state.isSignInLoading = true
-      })
       .addCase(requestSignIn.fulfilled, (state, action) => {
-        state.isSignInLoading = false
         state.loginData = {
           token: action.payload?.token,
           user: action.payload?.user || {}
         }
-        state.authInitialized = true
-      })
-      .addCase(requestSignIn.rejected, state => {
-        state.isSignInLoading = false
-        state.authInitialized = true
-      })
-      .addCase(requestSignUp.pending, state => {
-        state.isSignUpLoading = true
-      })
-      .addCase(requestSignUp.fulfilled, state => {
-        state.isSignUpLoading = false
-      })
-      .addCase(requestSignUp.rejected, state => {
-        state.isSignUpLoading = false
       })
       .addCase(requestSignUpFederationAdmin.pending, state => {
         state.isSignUpLoading = true
@@ -255,13 +191,9 @@ const authenticationSlice = createSlice({
           token: action.payload?.token || null,
           user: action.payload?.user || {}
         }
-        state.authInitialized = true
-      })
-      .addCase(syncAuthSession.rejected, state => {
-        state.authInitialized = true
       })
   }
 })
 
-export const { logout, setLoginData, markAuthInitialized } = authenticationSlice.actions
+export const { logout } = authenticationSlice.actions
 export default authenticationSlice.reducer

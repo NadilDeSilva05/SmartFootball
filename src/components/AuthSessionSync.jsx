@@ -4,7 +4,7 @@ import { useEffect } from 'react'
 import { onIdTokenChanged } from 'firebase/auth'
 import { useDispatch } from 'react-redux'
 import { getFirebaseAuth } from '@/lib/firebase-client'
-import { logout, markAuthInitialized, syncAuthSession } from '@/redux/slices/authenticationSlice'
+import { logout, syncAuthSession } from '@/redux/slices/authenticationSlice'
 
 const AuthSessionSync = () => {
   const dispatch = useDispatch()
@@ -13,8 +13,6 @@ const AuthSessionSync = () => {
     const auth = getFirebaseAuth()
 
     if (!auth) {
-      dispatch(markAuthInitialized())
-
       return undefined
     }
 
@@ -35,7 +33,6 @@ const AuthSessionSync = () => {
           } catch {}
         }
 
-        dispatch(markAuthInitialized())
       }
     })
 
