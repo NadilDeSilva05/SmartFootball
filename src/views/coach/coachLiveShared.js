@@ -32,6 +32,56 @@ export function registrationMatchesCoachClub (reg, coachClubId, match) {
   return !!(onHome || onAway)
 }
 
+/** Reject RTDB motion spikes (BMI160 step glitches). ~2 s between uploads. */
+export const MOTION_SPIKE_LIMITS = {
+  maxSpeedKmh: 45,
+  maxDistanceDeltaM: 50,
+  maxDistanceM: 120000
+}
+
+/**
+ * Drop impossible motion samples; keep last good distance/speed when a spike arrives.
+ */
+export function sanitizeMotionSample (sample, previous = null) {
+  const dist = Number(sample?.distanceM ?? sample?.distance_m ?? 0)
+  const speed = Number(sample?.speedKmh ?? sample?.speed_kmh ?? 0)
+  const steps = Number(sample?.steps ?? 0)
+  const stride = Number(sample?.strideM ?? sample?.stride_m ?? 0)
+
+  const finite = Number.isFinite(dist) && Number.isFinite(speed)
+  const speedOk = speed >= 0 && speed <= MOTION_SPIKE_LIMITS.maxSpeedKmh
+  const distOk = dist >= 0 && dist <= MOTION_SPIKE_LIMITS.maxDistanceM
+
+  let deltaOk = true
+  if (previous && Number.isFinite(previous.distanceM)) {
+    const delta = dist - previous.distanceM
+    deltaOk =
+      delta >= -5 &&
+      delta <= MOTION_SPIKE_LIMITS.maxDistanceDeltaM
+  } else if (dist > MOTION_SPIKE_LIMITS.maxDistanceDeltaM * 3) {
+    deltaOk = false
+  }
+
+  if (!finite || !speedOk || !distOk || !deltaOk) {
+    if (previous) {
+      return {
+        distanceM: previous.distanceM ?? 0,
+        speedKmh: 0,
+        steps: previous.steps ?? 0,
+        strideM: previous.strideM ?? stride
+      }
+    }
+    return { distanceM: 0, speedKmh: 0, steps: 0, strideM: stride }
+  }
+
+  return {
+    distanceM: dist,
+    speedKmh: Math.min(speed, MOTION_SPIKE_LIMITS.maxSpeedKmh),
+    steps,
+    strideM: stride
+  }
+}
+
 /** Metrics shown when a player has no active device stream (e.g. after substitution). */
 export const IDLE_LIVE_METRICS = {
   heartRate: 0,
@@ -57,15 +107,16 @@ export const IDLE_LIVE_METRICS = {
  * Map RTDB sensor blob to live + energy-oriented metrics.
  * Aligns with LiveMatchDashboard and substitution / injury logic (fatigue, workRate, injuryRisk, etc.).
  */
-export function sensorToLiveMetrics (sensor) {
+export function sensorToLiveMetrics (sensor, previousMotion = null) {
   const hr = sensor.heartRate || {}
   const motion = sensor.motion || {}
   const bpm = Number(hr.bpm || 0)
   const bpmInstant = Number(hr.bpm_instant ?? hr.bpm ?? 0)
-  const dist = Number(motion.distance_m || 0)
-  const speed = Number(motion.speed_kmh || 0)
-  const steps = Number(motion.steps || 0)
-  const stride = Number(motion.stride_m || 0)
+  const sanitized = sanitizeMotionSample(motion, previousMotion)
+  const dist = sanitized.distanceM
+  const speed = sanitized.speedKmh
+  const steps = sanitized.steps
+  const stride = sanitized.strideM
   const ir = hr.ir != null ? Number(hr.ir) : null
   const hrStatus = (hr.status && String(hr.status)) || null
 

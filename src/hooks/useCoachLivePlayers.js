@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useSelector } from 'react-redux'
 import { ref, onValue, off } from 'firebase/database'
 import { getRealtimeDbClient } from '@/lib/firebase-client'
@@ -29,6 +29,7 @@ export function useCoachLivePlayers () {
   const [activeLinks, setActiveLinks] = useState([])
   const [players, setPlayers] = useState([])
   const [loadingMatches, setLoadingMatches] = useState(true)
+  const lastMotionByPlayerRef = useRef({})
 
   const setSelectedMatchId = useCallback((id) => {
     setSelectedMatchIdState(id || '')
@@ -129,6 +130,7 @@ export function useCoachLivePlayers () {
 
   useEffect(() => {
     if (!selectedMatchId || activeLinks.length === 0) {
+      lastMotionByPlayerRef.current = {}
       setPlayers([])
       return
     }
@@ -174,7 +176,14 @@ export function useCoachLivePlayers () {
       const deviceRef = ref(rtdb, `devices/${deviceId}/sensor`)
       const handler = snapshot => {
         const sensor = snapshot.val() || {}
-        const m = sensorToLiveMetrics(sensor)
+        const prevMotion = lastMotionByPlayerRef.current[playerId]
+        const m = sensorToLiveMetrics(sensor, prevMotion)
+        lastMotionByPlayerRef.current[playerId] = {
+          distanceM: m.distanceM,
+          speedKmh: m.speedKmh,
+          steps: m.steps,
+          strideM: m.strideM
+        }
         const nowIso = new Date().toISOString()
         playersMap[playerId] = {
           id: `${selectedMatchId}_${playerId}`,
